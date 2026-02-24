@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  automl-api:
+    build: .
+    container_name: yolo_automl_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Монтируем бэкенд и логику
+      - ./app:/app/app
+      # Монтируем статические директории для фронтенда
+      - ./static:/app/static
+      # Монтируем папку результатов обучения YOLO
+      - ./runs:/app/runs
+      # Монтируем файл статуса
+      - ./status.json:/app/status.json
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
