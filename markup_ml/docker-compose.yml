@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   automl-api:
     build: .
@@ -7,13 +5,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Монтируем бэкенд и логику
       - ./app:/app/app
-      # Монтируем статические директории для фронтенда
       - ./static:/app/static
-      # Монтируем папку результатов обучения YOLO
       - ./runs:/app/runs
-      # Монтируем файл статуса
       - ./status.json:/app/status.json
     deploy:
       resources:
