@@ -1,0 +1,19 @@
+services:
+  automl-api:
+    build: .
+    container_name: yolo_automl_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./static:/app/static
+      - ./runs:/app/runs
+      - ./status.json:/app/status.json
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
