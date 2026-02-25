@@ -112,19 +112,44 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("params-form") || document.querySelector("form");
   if (!form) return;
 
-  form.addEventListener("submit", (event) => {
+  const statusEl = document.getElementById("train-status");
+
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
+
+    const submitBtn =
+      event.submitter ||
+      form.querySelector('button[type="submit"], input[type="submit"]');
+
+    if (submitBtn) submitBtn.disabled = true;
+    if (statusEl) statusEl.textContent = "Статус: отправка...";
 
     const payload = formToJSON(form);
     console.log(payload);
     console.log(JSON.stringify(payload, null, 2));
+
+    const res = await mockStartTraining(payload);
+    console.log(res);
+    if (statusEl) statusEl.textContent = `Статус: ${res.status}`;
   });
 });
 
 if (typeof module === "object" && module.exports) {
-  module.exports = { formToJSON };
+  module.exports = { formToJSON, mockStartTraining };
 }
 
 if (typeof window !== "undefined") {
   window.formToJSON = formToJSON;
+  window.mockStartTraining = mockStartTraining;
+}
+
+/**
+ * Имитирует отправку данных на сервер с задержкой 1 сек.
+ * @param {Record<string, any>} data
+ * @returns {Promise<{status: "started"}>}
+ */
+function mockStartTraining(data) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve({ status: "started" }), 1000);
+  });
 }
