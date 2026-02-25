@@ -1,3 +1,4 @@
+const BASE_URL = '';
 /**
  * Преобразует HTML-форму в обычный JS-объект
  *
@@ -152,4 +153,5 @@ function mockStartTraining(data) {
   return new Promise((resolve) => {
     setTimeout(() => resolve({ status: "started" }), 1000);
   });
+}
 }
