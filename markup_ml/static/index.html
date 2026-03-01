@@ -67,9 +67,16 @@
                     <button type="submit" id="startButton">Запустить AutoML</button>
                     <button type="button" id="cancelButton" disabled>Отмена</button>
                 </div>
+                <div id="train-status">Статус: ожидание</div>
             </form>
         </div>
+        <div class="card">
+            <h2>Мониторинг логов</h2>
+            <textarea id="logs-textarea" class="logs" readonly spellcheck="false"></textarea>
+            <div id="logs-status" class="logs-status"></div>
+        </div>
+    </div>>
 
-        <script src="app.js"></script>
-    </body>
+    <script src="app.js"></script>
+</body>
 </html>
