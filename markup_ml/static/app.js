@@ -1,4 +1,7 @@
 const BASE_URL = '';
+const LOGS_URL = (BASE_URL ? `${BASE_URL}/` : "") + "mocks/dummy_logs.txt";
+const LOGS_POLL_INTERVAL_MS = 1500;
+
 /**
  * Преобразует HTML-форму в обычный JS-объект
  *
@@ -109,8 +112,89 @@ function escapeForSelector(name) {
   return String(name).replace(/"/g, '\\"');
 }
 
+/**
+ * Загружает текст логов (с cache-busting)
+ * @param {string} url
+ * @returns {Promise<string>}
+ */
+async function fetchLogs(url) {
+  const u = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+  const res = await fetch(u, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
+}
+
+/**
+ * Обновляет textarea и автоскроллит вниз
+ * @param {HTMLTextAreaElement} textarea
+ * @param {string} text
+ */
+function renderLogsWithAutoscroll(textarea, text) {
+  textarea.value = text;
+  // автоскролл вниз
+  textarea.scrollTop = textarea.scrollHeight;
+}
+
+/**
+ * Запускает периодическое обновление логов
+ * @param {{ textareaId: string, statusId?: string, url?: string, intervalMs?: number }} opts
+ * @returns {() => void} stop()
+ */
+function startLogsPolling(opts) {
+  const {
+    textareaId,
+    statusId,
+    url = LOGS_URL,
+    intervalMs = LOGS_POLL_INTERVAL_MS,
+  } = opts;
+
+  const textarea = document.getElementById(textareaId);
+  const statusEl = statusId ? document.getElementById(statusId) : null;
+
+  if (!textarea) {
+    console.warn(`Logs textarea #${textareaId} not found`);
+    return () => {};
+  }
+
+  let lastText = null;
+  let timerId = null;
+
+  const tick = async () => {
+    try {
+      if (statusEl) statusEl.textContent = "Обновление логов...";
+      const text = await fetchLogs(url);
+
+
+      if (text !== lastText) {
+        renderLogsWithAutoscroll(textarea, text);
+        lastText = text;
+      }
+
+      if (statusEl) statusEl.textContent = `Обновлено: ${new Date().toLocaleTimeString()}`;
+    } catch (e) {
+      console.error("Failed to load logs:", e);
+      if (statusEl) statusEl.textContent = `Ошибка загрузки логов: ${e.message}`;
+    }
+  };
+
+  tick();
+  timerId = setInterval(tick, intervalMs);
+
+  return () => {
+    if (timerId) clearInterval(timerId);
+  };
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("params-form") || document.querySelector("form");
+  // мониторинг логов
+  startLogsPolling({
+    textareaId: "logs-textarea",
+    statusId: "logs-status",
+    url: LOGS_URL,
+    intervalMs: LOGS_POLL_INTERVAL_MS,
+  });
+
+  const form = document.getElementById("trainingForm") || document.querySelector("form");
   if (!form) return;
 
   const statusEl = document.getElementById("train-status");
@@ -126,17 +210,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (statusEl) statusEl.textContent = "Статус: отправка...";
 
     const payload = formToJSON(form);
-    console.log(payload);
-    console.log(JSON.stringify(payload, null, 2));
 
     const res = await mockStartTraining(payload);
-    console.log(res);
     if (statusEl) statusEl.textContent = `Статус: ${res.status}`;
   });
 });
 
 if (typeof module === "object" && module.exports) {
-  module.exports = { formToJSON, mockStartTraining };
+  module.exports = {
+    formToJSON,
+    mockStartTraining,
+    fetchLogs,
+    renderLogsWithAutoscroll,
+    startLogsPolling,
+  };
 }
 
 if (typeof window !== "undefined") {
@@ -153,5 +240,4 @@ function mockStartTraining(data) {
   return new Promise((resolve) => {
     setTimeout(() => resolve({ status: "started" }), 1000);
   });
-}
 }
