@@ -1,4 +1,4 @@
-const { formToJSON } = require("../../static/app");
+const { formToJSON } = require("../../static/app.js");
 
 function makeForm(html) {
   document.body.innerHTML = html;
@@ -12,6 +12,7 @@ test("собирает text и textarea", () => {
       <textarea name="b">world</textarea>
     </form>
   `);
+
   expect(formToJSON(form)).toEqual({ a: "hello", b: "world" });
 });
 
@@ -30,6 +31,7 @@ test("radio берёт только выбранный", () => {
       <input type="radio" name="r" value="y" checked />
     </form>
   `);
+
   expect(formToJSON(form)).toEqual({ r: "y" });
 });
 
@@ -49,6 +51,7 @@ test("группа checkbox с одним name даёт массив значе�
       <input type="checkbox" name="tags" value="c" checked />
     </form>
   `);
+
   expect(formToJSON(form)).toEqual({ tags: ["a", "c"] });
 });
 
@@ -62,6 +65,7 @@ test("select multiple даёт массив", () => {
       </select>
     </form>
   `);
+
   expect(formToJSON(form)).toEqual({ s: ["1", "3"] });
 });
 
@@ -72,6 +76,7 @@ test("повторяющиеся name собираются в массив", () 
       <input name="x" value="b" />
     </form>
   `);
+
   expect(formToJSON(form)).toEqual({ x: ["a", "b"] });
 });
 
@@ -83,10 +88,11 @@ test("disabled и элементы без name игнорируются", () => 
       <input value="no-name" />
     </form>
   `);
+
   expect(formToJSON(form)).toEqual({ ok: "1" });
 });
 
-test("file input: возвращает имена файлов (jsdom mock)", () => {
+test("file input: возвращает имена файлов", () => {
   const form = makeForm(`<form><input type="file" name="f" /></form>`);
   const input = form.querySelector('input[type="file"]');
 
