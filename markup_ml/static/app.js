@@ -1,5 +1,7 @@
 const API_BASE = "/api";
 const LOGS_POLL_INTERVAL_MS = 2000;
+const STATUS_POLL_INTERVAL_MS = 3000;
+const DUMMY_STATUS_URL = "/mocks/dummy_status.json";
 
 const state = {
   dashboard: null,
@@ -12,9 +14,15 @@ const state = {
   compareDatasetId: null,
   compareRunIds: [],
   runTab: "overview",
+  dummyStatus: {
+    modelNumber: "—",
+    totalCount: "—",
+    status: "unknown",
+  },
 };
 
 let stopLogsPolling = null;
+let stopStatusPolling = null;
 
 function qs(selector, root = document) {
   return root.querySelector(selector);
@@ -94,6 +102,11 @@ function cleanupSideEffects() {
   if (typeof stopLogsPolling === "function") {
     stopLogsPolling();
     stopLogsPolling = null;
+  }
+
+  if (typeof stopStatusPolling === "function") {
+    stopStatusPolling();
+    stopStatusPolling = null;
   }
 }
 
@@ -471,6 +484,108 @@ function startLogsPolling(opts) {
   };
 }
 
+function normalizeDummyStatus(payload = {}) {
+  return {
+    modelNumber: payload.modelNumber ?? payload.model_number ?? payload.model ?? "—",
+    totalCount: payload.totalCount ?? payload.total_count ?? payload.total ?? "—",
+    status: payload.status ?? "unknown",
+  };
+}
+
+async function fetchDummyStatus() {
+  const url = `${DUMMY_STATUS_URL}${DUMMY_STATUS_URL.includes("?") ? "&" : "?"}t=${Date.now()}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return normalizeDummyStatus(data);
+}
+
+function renderDummyStatusCard() {
+  const data = normalizeDummyStatus(state.dummyStatus);
+
+  return `
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Статус модели</h2>
+          <p class="card-subtitle">Обновление каждые 3 секунды из dummy_status.json</p>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="kpi">
+          <div class="kpi-label">Номер модели</div>
+          <div class="kpi-value" id="dummyStatusModel">${escapeHtml(String(data.modelNumber))}</div>
+          <div class="kpi-note">Источник: dummy_status.json</div>
+        </div>
+
+        <div class="kpi">
+          <div class="kpi-label">Общее количество</div>
+          <div class="kpi-value" id="dummyStatusTotal">${escapeHtml(String(data.totalCount))}</div>
+          <div class="kpi-note">Текущее значение</div>
+        </div>
+
+        <div class="kpi">
+          <div class="kpi-label">Статус</div>
+          <div class="kpi-value" id="dummyStatusValue">${renderStatus(data.status)}</div>
+          <div class="kpi-note" id="dummyStatusUpdated">Ожидание обновления...</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function applyDummyStatus(data) {
+  const normalized = normalizeDummyStatus(data);
+  state.dummyStatus = normalized;
+
+  const modelEl = qs("#dummyStatusModel");
+  const totalEl = qs("#dummyStatusTotal");
+  const statusEl = qs("#dummyStatusValue");
+  const updatedEl = qs("#dummyStatusUpdated");
+
+  if (modelEl) modelEl.textContent = String(normalized.modelNumber);
+  if (totalEl) totalEl.textContent = String(normalized.totalCount);
+  if (statusEl) statusEl.innerHTML = renderStatus(normalized.status);
+
+  if (updatedEl) {
+    updatedEl.textContent = `Обновлено: ${new Date().toLocaleTimeString("ru-RU")}`;
+  }
+}
+
+function startDummyStatusPolling() {
+  let timerId = null;
+
+  const tick = async () => {
+    try {
+      const data = await fetchDummyStatus();
+      applyDummyStatus(data);
+    } catch (error) {
+      const updatedEl = qs("#dummyStatusUpdated");
+      if (updatedEl) {
+        updatedEl.textContent = `Ошибка: ${error.message}`;
+      }
+    }
+  };
+
+  tick();
+  timerId = setInterval(tick, STATUS_POLL_INTERVAL_MS);
+
+  return () => {
+    if (timerId) clearInterval(timerId);
+  };
+}
+
 function mockStartTraining(data) {
   return new Promise((resolve) => {
     setTimeout(() => resolve({ status: "started" }), 1000);
@@ -510,6 +625,8 @@ function renderDashboardPage() {
         ${renderKpi("Running", String(summary.runningCount), "Активные задачи")}
         ${renderKpi("Queued", String(summary.queuedCount), "В очереди")}
       </section>
+
+      ${renderDummyStatusCard()}
 
       <section class="card">
         <div class="card-header">
@@ -637,6 +754,8 @@ function renderDashboardPage() {
     state.runTab = "overview";
     window.location.hash = `#runs/${row.dataset.runId}`;
   });
+
+  stopStatusPolling = startDummyStatusPolling();
 }
 
 async function renderDatasetsPage() {
@@ -2045,5 +2164,9 @@ if (typeof module === "object" && module.exports) {
     renderLogsWithAutoscroll,
     startLogsPolling,
     serializeForm,
+    fetchDummyStatus,
+    startDummyStatusPolling,
+    normalizeDummyStatus,
+    applyDummyStatus,
   };
 }
