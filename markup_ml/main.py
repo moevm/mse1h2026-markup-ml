@@ -1,9 +1,10 @@
+import time
 from copy import deepcopy
 from datetime import datetime, timezone
 from itertools import count
 from typing import Any, Optional
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +40,11 @@ AVAILABLE_PRIORITIES = ["normal", "high", "low"]
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def run_automl() -> None:
+    time.sleep(10)
+    print("AutoML task completed")
 
 
 def next_dataset_id() -> str:
@@ -371,6 +377,12 @@ async def export_run(run_id: str, format: Optional[str] = "json"):
         return PlainTextResponse(to_simple_yaml(detail), media_type="text/yaml")
 
     return JSONResponse(detail)
+
+
+@app.post("/api/start")
+async def start_automl(background_tasks: BackgroundTasks):
+    background_tasks.add_task(run_automl)
+    return {"message": "AutoML process started", "status": "200"}
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
