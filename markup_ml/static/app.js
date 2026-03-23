@@ -19,6 +19,12 @@ const state = {
     totalCount: "—",
     status: "unknown",
   },
+  trainingMonitor: {
+    visible: false,
+    runId: null,
+    statusText: "Ожидание запуска...",
+    logs: "",
+  }
 };
 
 let stopLogsPolling = null;
@@ -585,6 +591,67 @@ function startDummyStatusPolling() {
     if (timerId) clearInterval(timerId);
   };
 }
+function renderTrainingMonitorBlock() {
+  const monitor = state.trainingMonitor || {};
+  const hiddenAttr = monitor.visible ? "" : "hidden";
+
+  return `
+    <article class="run-summary-card" id="datasetTrainingMonitor" ${hiddenAttr} style="margin-top:16px;">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title" style="font-size:20px;">Мониторинг обучения</h3>
+          <p class="card-subtitle">Статус запуска и вывод логов</p>
+        </div>
+      </div>
+
+      <div id="datasetTrainingLogsStatus" class="logs-status">${escapeHtml(
+        monitor.statusText || "Ожидание запуска..."
+      )}</div>
+
+      <textarea
+        id="datasetTrainingLogsTextarea"
+        class="logs-box"
+        readonly
+        spellcheck="false"
+        style="height:220px; min-height:220px; resize:vertical;"
+      >${escapeHtml(monitor.logs || "")}</textarea>
+    </article>
+  `;
+}
+
+function setTrainingMonitorVisible(visible) {
+  state.trainingMonitor.visible = !!visible;
+  const block = qs("#datasetTrainingMonitor");
+  if (block) {
+    block.hidden = !visible;
+  }
+}
+
+function setTrainingMonitorStatus(text) {
+  state.trainingMonitor.statusText = text;
+  const el = qs("#datasetTrainingLogsStatus");
+  if (el) {
+    el.textContent = text;
+  }
+}
+
+function setTrainingMonitorLogs(text) {
+  state.trainingMonitor.logs = text;
+  const textarea = qs("#datasetTrainingLogsTextarea");
+  if (textarea) {
+    renderLogsWithAutoscroll(textarea, text);
+  }
+}
+
+function appendTrainingMonitorLog(line) {
+  const current = state.trainingMonitor.logs || "";
+  const next = current ? `${current}\n${line}` : line;
+  setTrainingMonitorLogs(next);
+}
+
+function trainingMonitorLine(message) {
+  return `[${new Date().toLocaleTimeString("ru-RU")}] ${message}`;
+}
 
 function mockStartTraining(data) {
   return new Promise((resolve) => {
@@ -937,6 +1004,7 @@ async function renderDatasetsPage() {
                       <button class="btn btn-primary" type="submit">Запустить AutoML</button>
                     </div>
                   </form>
+                  ${renderTrainingMonitorBlock()}
                 </article>
 
                 <article class="run-summary-card">
@@ -1071,52 +1139,71 @@ async function renderDatasetsPage() {
   });
 
   qs("#launchRunForm")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearNotice();
+  event.preventDefault();
+  clearNotice();
 
-    const form = event.currentTarget;
-    const button = qs('button[type="submit"]', form);
-    if (button) button.disabled = true;
+  const form = event.currentTarget;
+  const button = qs('button[type="submit"]', form);
+  if (button) button.disabled = true;
 
-    try {
-      const payload = serializeForm(form);
-      if (payload.budget !== "") payload.budget = Number(payload.budget);
+  setTrainingMonitorVisible(true);
+  state.trainingMonitor.runId = null;
+  setTrainingMonitorStatus("Подготовка запуска...");
+  setTrainingMonitorLogs("");
+  appendTrainingMonitorLog(trainingMonitorLine("Подготовка параметров запуска"));
 
-      const response = await api(`/datasets/${state.activeDatasetId}/runs`, {
-        method: "POST",
-        body: payload,
-      });
+  try {
+    const payload = serializeForm(form);
+    if (payload.budget !== "") payload.budget = Number(payload.budget);
 
-      state.runDetails = {};
-      await refreshCoreData();
+    appendTrainingMonitorLog(trainingMonitorLine("Отправка запроса на запуск обучения"));
 
-      const runId =
-        response?.runId ||
-        response?.id ||
-        getRunsByDataset(state.activeDatasetId)
-          .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0]?.id;
+    const response = await api(`/datasets/${state.activeDatasetId}/runs`, {
+      method: "POST",
+      body: payload,
+    });
 
-      if (!runId) {
-        showNotice("Запуск создан, но id не вернулся.", "warning");
-        return;
-      }
+    state.runDetails = {};
+    await refreshCoreData();
 
-      state.activeRunId = runId;
-      state.runTab = "overview";
-      window.location.hash = `#runs/${runId}`;
-    } catch (error) {
-      showNotice(error.message || "Не удалось запустить AutoML", "error");
-    } finally {
-      if (button) button.disabled = false;
+    const runId =
+      response?.runId ||
+      response?.id ||
+      getRunsByDataset(state.activeDatasetId)
+        .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0]?.id;
+
+    if (!runId) {
+      setTrainingMonitorStatus("Запуск создан, но id не вернулся.");
+      appendTrainingMonitorLog(trainingMonitorLine("Не удалось определить id запуска"));
+      showNotice("Запуск создан, но id не вернулся.", "warning");
+      return;
     }
+
+    state.activeRunId = runId;
+    state.runTab = "overview";
+    state.trainingMonitor.runId = runId;
+
+    setTrainingMonitorStatus("Запуск создан");
+    appendTrainingMonitorLog(trainingMonitorLine(`Запуск создан: ${runId}`));
+    showNotice("Обучение запущено.", "success");
+
+    window.location.hash = `#runs/${runId}`;
+  } catch (error) {
+    const message = error.message || "Не удалось запустить AutoML";
+    setTrainingMonitorStatus(`Ошибка: ${message}`);
+    appendTrainingMonitorLog(trainingMonitorLine(`Ошибка запуска: ${message}`));
+    showNotice(message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
   });
 
   qs("#datasetRunsTable")?.addEventListener("click", (event) => {
-    const row = event.target.closest("tr[data-run-id]");
-    if (!row) return;
-    state.activeRunId = row.dataset.runId;
-    state.runTab = "overview";
-    window.location.hash = `#runs/${row.dataset.runId}`;
+  const row = event.target.closest("tr[data-run-id]");
+  if (!row) return;
+  state.activeRunId = row.dataset.runId;
+  state.runTab = "overview";
+  window.location.hash = `#runs/${row.dataset.runId}`;
   });
 }
 
@@ -1454,7 +1541,7 @@ function renderRunEdge(detail) {
   `;
 }
 
-function startRunLogsPolling(runId, textareaId, statusId, live) {
+function startRunLogsPolling(runId, textareaId, statusId, live, onUpdate) {
   const textarea = qs(`#${textareaId}`);
   const statusEl = qs(`#${statusId}`);
   if (!textarea) return () => {};
@@ -1462,20 +1549,34 @@ function startRunLogsPolling(runId, textareaId, statusId, live) {
   let timerId = null;
   let lastText = null;
 
+  const pushUpdate = (payload) => {
+    if (typeof onUpdate === "function") {
+      onUpdate(payload);
+    }
+  };
+
   const load = async () => {
     try {
-      if (statusEl) statusEl.textContent = "Загрузка логов...";
+      const loadingText = "Загрузка логов...";
+      if (statusEl) statusEl.textContent = loadingText;
+      pushUpdate({ statusText: loadingText });
+
       const text = await api(`/runs/${runId}/logs`, { asText: true });
 
       if (text !== lastText) {
         textarea.value = text;
         textarea.scrollTop = textarea.scrollHeight;
         lastText = text;
+        pushUpdate({ text });
       }
 
-      if (statusEl) statusEl.textContent = `Обновлено: ${new Date().toLocaleTimeString()}`;
+      const updatedText = `Обновлено: ${new Date().toLocaleTimeString()}`;
+      if (statusEl) statusEl.textContent = updatedText;
+      pushUpdate({ statusText: updatedText });
     } catch (error) {
-      if (statusEl) statusEl.textContent = `Ошибка: ${error.message}`;
+      const errorText = `Ошибка: ${error.message}`;
+      if (statusEl) statusEl.textContent = errorText;
+      pushUpdate({ statusText: errorText });
     }
   };
 
