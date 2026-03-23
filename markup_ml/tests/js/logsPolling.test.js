@@ -1,7 +1,13 @@
-const { fetchLogs, renderLogsWithAutoscroll, startLogsPolling } = require("../../static/app.js");
+const {
+  fetchLogs,
+  renderLogsWithAutoscroll,
+  startLogsPolling,
+} = require("../../static/app.js");
 
 const flushPromises = async (n = 5) => {
-  for (let i = 0; i < n; i += 1) await Promise.resolve();
+  for (let i = 0; i < n; i += 1) {
+    await Promise.resolve();
+  }
 };
 
 describe("мониторинг логов", () => {
@@ -20,6 +26,7 @@ describe("мониторинг логов", () => {
     Object.defineProperty(ta, "scrollHeight", { value: 999, configurable: true });
 
     renderLogsWithAutoscroll(ta, "hello\nworld");
+
     expect(ta.value).toBe("hello\nworld");
     expect(ta.scrollTop).toBe(999);
   });
@@ -32,6 +39,7 @@ describe("мониторинг логов", () => {
     }));
 
     const text = await fetchLogs("mocks/dummy_logs.txt");
+
     expect(text).toBe("LOGS");
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
