@@ -373,6 +373,7 @@ async def export_run(run_id: str, format: Optional[str] = "json"):
     return JSONResponse(detail)
 
 
+app.mount("/runs", StaticFiles(directory="runs"), name="runs")
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":
