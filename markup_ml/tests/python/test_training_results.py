@@ -5,7 +5,7 @@ import pytest
 from markup_ml.app.core.training_results import read_latest_epoch_and_box_loss
 
 
-def test_rfP8ruvDkjcqemnWXatLREqiy2heFeMBTc_given_directory(tmp_path: Path) -> None:
+def  test_process_existing_directory(tmp_path: Path) -> None:
     results_file = tmp_path / "results.csv"
     results_file.write_text(
         "epoch,train/box_loss,metrics/mAP50(B)\n"
