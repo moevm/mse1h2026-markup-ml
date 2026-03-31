@@ -1,37 +1,76 @@
-import os
+from pathlib import Path
+from typing import Optional, Sequence
+
 import yaml
 
-def generate_yolo_yaml(dataset_path: str, num_classes: int) -> str:
-    abs_dataset_path = os.path.abspath(dataset_path)
-    os.makedirs(abs_dataset_path, exist_ok=True)
 
-    yaml_data = {
-        "path": abs_dataset_path,
-        "train": "images/train",  # Пути вводить относительно 'path'
-        "val": "images/val",      
-        "test": "images/test",    
+def normalize_class_names(
+    num_classes: int,
+    class_names: Optional[Sequence[str]] = None,
+) -> list[str]:
+    if num_classes <= 0:
+        raise ValueError("num_classes must be greater than 0")
+
+    if class_names is None:
+        return [f"class_{index}" for index in range(num_classes)]
+
+    normalized = [str(name).strip() for name in class_names if str(name).strip()]
+    if len(normalized) != num_classes:
+        raise ValueError(
+            "The number of class names must match num_classes"
+        )
+
+    return normalized
+
+
+def build_yolo_yaml_payload(
+    dataset_path: str | Path,
+    num_classes: int,
+    class_names: Optional[Sequence[str]] = None,
+    train_folder: str = "images/train",
+    val_folder: str = "images/val",
+    test_folder: Optional[str] = "images/test",
+) -> dict:
+    dataset_root = Path(dataset_path).resolve()
+    payload = {
+        "path": str(dataset_root),
+        "train": train_folder,
+        "val": val_folder,
         "nc": num_classes,
-        "names": [f"class_{i}" for i in range(num_classes)]
+        "names": normalize_class_names(num_classes, class_names),
     }
 
-    yaml_file_path = os.path.join(abs_dataset_path, "data.yaml")
-    with open(yaml_file_path, "w", encoding="utf-8") as file_YOLO:
-        yaml.dump(yaml_data, file_YOLO, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        
-    return yaml_file_path
+    if test_folder:
+        payload["test"] = test_folder
 
-'''
-    if __name__ == "__main__":
-    # Тестовые входные данные
-    test_path = "./my_custom_dataset"
-    classes_count = 5
-    
-    # Генерация
-    result_file = generate_yolo_yaml(test_path, classes_count)
-    print(f"The file was successfully generated on path\nПуть: {result_file}")
-    
-    # Проверка содержимого
-    print("-" * 30)
-    with open(result_file, "r", encoding="utf-8") as f:
-        print(f.read())
-'''
+    return payload
+
+
+def generate_yolo_yaml(
+    dataset_path: str | Path,
+    num_classes: int,
+    class_names: Optional[Sequence[str]] = None,
+    output_path: Optional[str | Path] = None,
+    train_folder: str = "images/train",
+    val_folder: str = "images/val",
+    test_folder: Optional[str] = "images/test",
+) -> str:
+    dataset_root = Path(dataset_path).resolve()
+    dataset_root.mkdir(parents=True, exist_ok=True)
+
+    payload = build_yolo_yaml_payload(
+        dataset_path=dataset_root,
+        num_classes=num_classes,
+        class_names=class_names,
+        train_folder=train_folder,
+        val_folder=val_folder,
+        test_folder=test_folder,
+    )
+
+    yaml_path = Path(output_path).resolve() if output_path else dataset_root / "data.yaml"
+    yaml_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with yaml_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(payload, file, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+    return str(yaml_path)

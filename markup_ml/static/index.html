@@ -47,3 +47,135 @@
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!---
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoML YOLO</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AutoML YOLO</h1>
+            <p>Автоматический подбор гиперпараметров для YOLO</p>
+        </header>
+
+        <div class="card">
+            <h2>Настройки обучения</h2>
+            <form id="trainingForm">
+                <div class="form-group">
+                    <label for="datasetPath">Путь к датасету (data.yaml):</label>
+                    <input type="text" id="datasetPath" name="datasetPath" value="coco8.yaml" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="epochs">Эпохи:</label>
+                        <input type="number" id="epochs" name="epochs" value="10" min="1" max="1000" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="learningRate">Learning Rate:</label>
+                        <input type="number" id="learningRate" name="learningRate" value="0.01" step="0.0001" min="0.0001" max="0.1" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batchSize">Batch Size:</label>
+                        <input type="number" id="batchSize" name="batchSize" value="16" min="1" max="256" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="yoloVersion">Версия YOLO:</label>
+                        <select id="yoloVersion" name="yoloVersion">
+                            <option value="yolov8n.pt">YOLOv8n (nano)</option>
+                            <option value="yolov8s.pt">YOLOv8s (small)</option>
+                            <option value="yolov8m.pt">YOLOv8m (medium)</option>
+                            <option value="yolov8l.pt">YOLOv8l (large)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="algorithm">Алгоритм поиска:</label>
+                        <select id="algorithm" name="algorithm">
+                            <option value="grid">Grid Search</option>
+                            <option value="random">Random Search</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="randomIterationsGroup">
+                        <label for="nIter">Количество итераций (для Random):</label>
+                        <input type="number" id="nIter" name="nIter" value="5" min="1" max="100">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" id="startButton">Запустить AutoML</button>
+                    <button type="button" id="cancelButton" disabled>Отмена</button>
+                </div>
+            </form>
+        </div>
+>
+
+        <div class="card" id="monitoringBlock" style="display: none;">
+            <h2>Прогресс обучения</h2>
+
+            <div class="status-bar">
+                <div class="status-text">
+                    <span id="statusMessage">Обучается модель <span id="currentModel">0</span> из <span id="totalModels">0</span></span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+                </div>
+            </div>
+
+            <div class="logs-container">
+                <label for="logsArea">Логи обучения:</label>
+                <textarea id="logsArea" class="logs-area" readonly placeholder="Логи появятся здесь..."></textarea>
+            </div>
+        </div>
+
+        <div class="card" id="resultsBlock" style="display: none;">
+            <h2>Результаты обучения</h2>
+
+            <div class="results-container">
+                <div class="result-item">
+                    <h3>График обучения</h3>
+                    <img id="resultChart" src="" alt="График обучения" class="result-image">
+                </div>
+
+                <div class="result-item">
+                    <h3>Модель</h3>
+                    <a id="downloadModel" href="#" download="best.pt" class="download-button">Скачать модель (best.pt)</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
+>
