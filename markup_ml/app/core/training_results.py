@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import csv
 from pathlib import Path
 
@@ -67,10 +65,10 @@ def _find_results_csv(base_path: Path) -> Path:
     if direct_path.is_file():
         return direct_path
 
-    matches = list(base_path.rglob("results.csv"))
+    matches = sorted(base_path.rglob("results.csv"))
+
     if not matches:
         raise FileNotFoundError(f"results.csv not found in directory: {base_path}")
-    return max(matches, key=lambda p: p.stat().st_mtime)
 
     return matches[0]
 
