@@ -39,11 +39,16 @@ class AutoMLOrchestrator:
             'batch': config.get('batch', 16),
             'imgsz': config.get('imgsz', 640),
             'lr0': config.get('lr0', 0.01),
+            'device': config.get('device'),
             'project': 'runs/detect/automl',
             'name': f'trial_{trial_idx:03d}',
             'exist_ok': True,
             'verbose': False
         }
+
+        if config.get('device') is not None:
+            train_params['device'] = config.get('device')
+
         early_stopping = create_early_stopping_callback()
 
         #обучение

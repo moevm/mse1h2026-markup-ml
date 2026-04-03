@@ -1,19 +1,23 @@
 services:
   automl-api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: yolo_automl_backend
     ports:
       - "8000:8000"
+    environment:
+      AUTOML_DEVICE: auto
+      STATUS_FILE: /app/runs/status.json
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     volumes:
-      - ./app:/app/app
-      - ./static:/app/static
       - ./runs:/app/runs
-      - ./status.json:/app/status.json
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - ./uploads:/app/uploads
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
