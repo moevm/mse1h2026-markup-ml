@@ -1,5 +1,3 @@
-# Task 1.2.1
-
 import json
 import logging
 import os
@@ -14,8 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class StatusManager:
-    def __init__(self, status_file: str = "status.json"):
-        file_path = Path(status_file)
+    def __init__(self, status_file: str = "runs/status.json"):
+        status_path = os.getenv("STATUS_FILE", status_file)
+        file_path = Path(status_path)
         if file_path.is_absolute():
             self.status_file = file_path
         else:
@@ -38,7 +37,7 @@ class StatusManager:
             with open(self.status_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            logging.error(f"Ошибка: файл {self.status_file} поврежден. Возвращаем статус по умолчанию.")
+            logging.error(f"Ошибка: файл {self.status_file} поврежден")
             return self._get_default_status()
         except Exception as e:
             logging.error(f"Ошибка чтения файла статуса: {e}")
@@ -62,3 +61,13 @@ class StatusManager:
             if temp_file.exists():
                 temp_file.unlink()
             return False
+
+    def update_status(self, **updates: Any) -> Dict[str, Any]:
+        merged_status = self._get_default_status()
+        merged_status.update(self.read_status())
+        merged_status.update(updates)
+
+        if not self.write_status(merged_status):
+            raise OSError(f"Failed to write status file: {self.status_file}")
+
+        return merged_status

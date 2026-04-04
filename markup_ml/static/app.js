@@ -24,6 +24,7 @@ const state = {
     runId: null,
     statusText: "Ожидание запуска...",
     logs: "",
+    pollingInterval: null,
   }
 };
 
@@ -648,6 +649,58 @@ function appendTrainingMonitorLog(line) {
   const next = current ? `${current}\n${line}` : line;
   setTrainingMonitorLogs(next);
 }
+function startTrainingMonitorPolling(runId) {
+  if (state.trainingMonitor.pollingInterval) {
+    clearInterval(state.trainingMonitor.pollingInterval);
+  }
+  
+  const updateLogs = async () => {
+    try {
+      const logs = await api(`/runs/${runId}/logs`, { asText: true });
+      setTrainingMonitorLogs(logs);
+
+      const lastLines = logs.split('\n').slice(-5).join('\n');
+      
+      if (lastLines.includes('ОБУЧЕНИЕ УСПЕШНО ЗАВЕРШЕНО') || 
+          lastLines.includes(' ОБУЧЕНИЕ УСПЕШНО ЗАВЕРШЕНО!')) {
+        setTrainingMonitorStatus(' Обучение завершено');
+
+        if (state.trainingMonitor.pollingInterval) {
+          clearInterval(state.trainingMonitor.pollingInterval);
+          state.trainingMonitor.pollingInterval = null;
+        }
+
+        refreshCoreData();
+        
+      } else if (lastLines.includes('Ошибка')) {
+        setTrainingMonitorStatus('Ошибка обучения');
+
+        if (state.trainingMonitor.pollingInterval) {
+          clearInterval(state.trainingMonitor.pollingInterval);
+          state.trainingMonitor.pollingInterval = null;
+        }
+        
+      } else {
+        const lastLine = logs.split('\n').pop();
+        if (lastLine && !lastLine.includes('[')) {
+          setTrainingMonitorStatus(lastLine);
+        } else {
+          setTrainingMonitorStatus('Обучение выполняется...');
+        }
+      }
+      
+    } catch (error) {
+      console.error('Ошибка загрузки логов:', error);
+      setTrainingMonitorStatus('Ошибка загрузки логов');
+    }
+  };
+  
+  updateLogs();
+
+  state.trainingMonitor.pollingInterval = setInterval(updateLogs, 2000);
+}
+
+
 
 function trainingMonitorLine(message) {
   return `[${new Date().toLocaleTimeString("ru-RU")}] ${message}`;
@@ -718,9 +771,7 @@ function renderDashboardPage() {
                           <div>
                             <div class="dataset-name">${escapeHtml(dataset.name || "Без названия")}</div>
                             <div class="dataset-meta">
-                              ${escapeHtml(dataset.taskType || "—")} · ${escapeHtml(
-                                String(dataset.samples ?? "—")
-                              )} samples
+
                             </div>
                           </div>
                           ${renderStatus(dataset.status || "ready")}
@@ -825,6 +876,133 @@ function renderDashboardPage() {
   stopStatusPolling = startDummyStatusPolling();
 }
 
+
+function addHyperparamRow() {
+  const container = document.getElementById('hyperparamsContainer');
+  const newRow = document.createElement('div');
+  newRow.className = 'hyperparam-row';  
+  const searchAlgSelect = qs("#searchAlg");
+  const isRandomSearch = searchAlgSelect && searchAlgSelect.value === "RandomSearch";
+  
+  newRow.innerHTML = `
+    <input type="text" name="hyperparam_name[]" placeholder="Название" class="hyperparam-name" />
+    ${isRandomSearch ? `
+      <select name="hyperparam_type[]" class="hyperparam-type">
+        <option value="list">Список значений</option>
+        <option value="range">Диапазон (мин макс)</option>
+      </select>
+    ` : '<input type="hidden" name="hyperparam_type[]" value="list" />'}
+    <input type="text" name="hyperparam_values[]" placeholder="Значения" class="hyperparam-values" />
+    <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">✖</button>
+  `;
+  container.appendChild(newRow);
+}
+
+function removeHyperparamRow(button) {
+  const row = button.closest('.hyperparam-row');
+  if (row && document.querySelectorAll('.hyperparam-row').length > 1) {
+    row.remove();
+  } else {
+    showNotice('Должна остаться хотя бы одна строка', 'warning');
+  }
+}
+
+function collectHyperparams() {
+  const names = document.querySelectorAll('input[name="hyperparam_name[]"]');
+  const types = document.querySelectorAll('select[name="hyperparam_type[]"], input[name="hyperparam_type[]"]');
+  const values = document.querySelectorAll('input[name="hyperparam_values[]"]');
+  const hyperparams = {};
+  
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i].value.trim();
+    let type = types[i]?.value || 'list';
+    const valuesStr = values[i].value.trim();
+    
+    if (name && valuesStr) {
+      if (type === 'list') {
+        const valuesArray = valuesStr.split(/\s+/).map(v => {
+          const num = Number(v);
+          return isNaN(num) ? v : num;
+        });
+        hyperparams[name] = {
+          type: 'list',
+          values: valuesArray
+        };
+      } else if (type === 'range') {
+        const parts = valuesStr.split(/\s+/);
+        if (parts.length >= 2) {
+          const min = Number(parts[0]);
+          const max = Number(parts[1]);
+          
+          if (!isNaN(min) && !isNaN(max)) {
+            hyperparams[name] = {
+              type: 'range',
+              min: min,
+              max: max,
+            };
+          }
+        }
+      }
+    }
+  }
+  
+  return hyperparams;
+}
+
+function toggleHyperparamTypes() {
+  const searchAlgSelect = qs("#searchAlg");
+  const isRandomSearch = searchAlgSelect && searchAlgSelect.value === "RandomSearch";
+  
+  // Находим все строки гиперпараметров
+  const hyperparamRows = document.querySelectorAll('.hyperparam-row');
+  
+  hyperparamRows.forEach(row => {
+    const existingTypeSelect = row.querySelector('select[name="hyperparam_type[]"]');
+    const existingHiddenInput = row.querySelector('input[name="hyperparam_type[]"][type="hidden"]');
+    const valuesInput = row.querySelector('input[name="hyperparam_values[]"]');
+    
+    if (isRandomSearch) {
+      if (existingHiddenInput) {
+        const select = document.createElement('select');
+        select.name = 'hyperparam_type[]';
+        select.className = 'hyperparam-type';
+        select.innerHTML = `
+          <option value="list">Список значений</option>
+          <option value="range">Диапазон (мин макс)</option>
+        `;
+        existingHiddenInput.replaceWith(select);
+      } else if (existingTypeSelect) {
+        existingTypeSelect.style.display = 'block';
+      }
+      
+      if (valuesInput) {
+        const typeSelect = row.querySelector('select[name="hyperparam_type[]"]');
+        if (typeSelect) {
+          const currentType = typeSelect.value;
+          valuesInput.placeholder = currentType === 'list' ? 'Значения: 0.001 0.01 0.1' : 'Диапазон: 0.001 0.1';
+          
+          typeSelect.onchange = () => {
+            valuesInput.placeholder = typeSelect.value === 'list' 
+              ? 'Значения: 0.001 0.01 0.1' 
+              : 'Диапазон: 0.001 0.1';
+          };
+        }
+      }
+    } else {
+      if (existingTypeSelect) {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'hyperparam_type[]';
+        hiddenInput.value = 'list';
+        existingTypeSelect.replaceWith(hiddenInput);
+      }
+      if (valuesInput) {
+        valuesInput.placeholder = 'Значения: 0.001 0.01 0.1';
+      }
+    }
+  });
+}
+
 async function renderDatasetsPage() {
   setPageMeta("Datasets", "Загрузка датасетов и запуск AutoML");
 
@@ -833,6 +1011,7 @@ async function renderDatasetsPage() {
 
   const datasetDetail = activeId ? await ensureDatasetDetail(activeId) : null;
   const datasetRuns = activeId ? getRunsByDataset(activeId).slice(0, 5) : [];
+  const yamlReady = Boolean(datasetDetail?.yamlPath);
 
   renderRoot(`
     <div class="page-stack">
@@ -851,15 +1030,6 @@ async function renderDatasetsPage() {
                 <label for="displayName">Название</label>
                 <input id="displayName" name="displayName" type="text" required />
               </div>
-
-              <div class="form-group">
-                <label for="taskType">Тип задачи</label>
-                <select id="taskType" name="taskType" required>
-                  <option value="detection">Detection</option>
-                  <option value="segmentation">Segmentation</option>
-                  <option value="classification">Classification</option>
-                </select>
-              </div>
             </div>
 
             <div class="form-group">
@@ -867,9 +1037,26 @@ async function renderDatasetsPage() {
               <textarea id="description" name="description"></textarea>
             </div>
 
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="numClasses">Classes Count</label>
+                <input id="numClasses" name="numClasses" type="number" min="1" placeholder="3" />
+              </div>
+
+              <div class="form-group">
+                <label for="classNames">Class Names</label>
+                <input id="classNames" name="classNames" type="text" placeholder="person, car, ball" />
+              </div>
+            </div>
+
+            <div class="helper-text">
+              For archives these values are used to create <code>data.yaml</code>. If you upload an existing
+              YAML file, the values will be read automatically.
+            </div>
+
             <div class="form-group">
               <label for="datasetFile">Файл датасета</label>
-              <input id="datasetFile" name="datasetFile" type="file" accept=".zip,.yaml,.yml,.json" required />
+              <input id="datasetFile" name="datasetFile" type="file" accept=".zip,.yaml,.yml,.json" required  />
             </div>
 
             <div class="form-actions">
@@ -898,9 +1085,7 @@ async function renderDatasetsPage() {
                             <div>
                               <div class="dataset-name">${escapeHtml(dataset.name || "Без названия")}</div>
                               <div class="dataset-meta">
-                                ${escapeHtml(dataset.taskType || "—")} · ${escapeHtml(
-                                  String(dataset.samples ?? "—")
-                                )} samples
+
                               </div>
                             </div>
                             ${renderStatus(dataset.status || "ready")}
@@ -956,6 +1141,35 @@ async function renderDatasetsPage() {
                     </div>
                   </div>
 
+                  ${
+                    yamlReady
+                      ? `
+                        <div class="form-group" style="margin-bottom:16px;">
+                          <label>Dataset YAML</label>
+                          <input type="text" value="${escapeHtml(datasetDetail.yamlPath || "")}" readonly />
+                        </div>
+                        <div class="form-actions" style="margin-bottom:12px;">
+                          <a
+                            class="btn btn-secondary"
+                            href="${API_BASE}/datasets/${encodeURIComponent(datasetDetail.id)}/yaml"
+                            download="data.yaml"
+                          >Download data.yaml</a>
+                        </div>
+                        <textarea
+                          class="logs-box"
+                          readonly
+                          spellcheck="false"
+                          style="height:220px; min-height:220px; margin-bottom:16px;"
+                        >${escapeHtml(datasetDetail.yamlContent || "")}</textarea>
+                      `
+                      : `
+                        <div class="notice warning" style="margin-bottom:16px;">
+                          data.yaml is not configured yet. Open Settings, fill in classes and dataset folders,
+                          then save to generate YAML for training.
+                        </div>
+                      `
+                  }
+
                   <form id="launchRunForm">
                     <div class="form-grid">
                       <div class="form-group">
@@ -987,12 +1201,7 @@ async function renderDatasetsPage() {
                     </div>
 
                     <div class="form-grid">
-                      <div class="form-group">
-                        <label for="budget">Бюджет поиска</label>
-                        <input id="budget" name="budget" type="number" min="1" value="${escapeHtml(
-                          String(datasetDetail.settings?.budget ?? "")
-                        )}" />
-                      </div>
+
 
                       <div class="form-group">
                         <label for="runNotes">Комментарий</label>
@@ -1000,8 +1209,46 @@ async function renderDatasetsPage() {
                       </div>
                     </div>
 
+                    <div class="form-group">
+                      <label for="searchAlg">Алгоритм Поиска</label>
+                      <select id="searchAlg" name="searchAlg">
+                        ${optionMarkup(
+                          (datasetDetail.searchAlgorithm?.length
+                            ? datasetDetail.searchAlgorithm
+                            : ["GridSearch", "RandomSearch"]
+                          ).map((value) => ({ value, label: value.toUpperCase() })),
+                          datasetDetail.settings?.searchAlgorithm || "GridSearch"
+                        )}
+                        </select>
+                      </div>
+                      <div class="form-group" id="randomSearchIterationsGroup" style="display: none;">
+                        <label for="randomSearchIterations">Количество комбинаций (RandomSearch)</label>
+                        <input type="number" id="randomSearchIterations" name="randomSearchIterations" min="1" max="1000" value="10" step="1"
+                          class="form-control"
+                        />
+                        <small class="form-text text-muted">Количество случайных комбинаций гиперпараметров (1-1000)</small>
+                      </div>
+
+                      <div class="form-group">
+                        <label>Гиперпараметры</label>
+                        <div id="hyperparamsContainer">
+                          <div class="hyperparam-row">
+                            <input type="text" name="hyperparam_name[]" placeholder="Название" class="hyperparam-name" />
+                            <!-- select будет заменен на hidden в зависимости от алгоритма -->
+                            <select name="hyperparam_type[]" class="hyperparam-type">
+                              <option value="list">Список значений</option>
+                              <option value="range">Диапазон (мин макс)</option>
+                            </select>
+                            <input type="text" name="hyperparam_values[]" placeholder="Значения: 0.001 0.01 0.1" class="hyperparam-values" />
+                            <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">✖</button>
+                          </div>
+                        </div>
+                        <button type="button" id="addHyperparamBtn" class="btn-add-param">+ Добавить гиперпараметр</button>
+                      </div>
                     <div class="form-actions">
-                      <button class="btn btn-primary" type="submit">Запустить AutoML</button>
+                      <button class="btn btn-primary" type="submit" ${yamlReady ? "" : "disabled"}>
+                        Запустить AutoML
+                      </button>
                     </div>
                   </form>
                   ${renderTrainingMonitorBlock()}
@@ -1122,7 +1369,12 @@ async function renderDatasetsPage() {
       state.datasetDetails = {};
       await refreshCoreData();
       state.activeDatasetId = created?.id || state.datasets[0]?.id || null;
-      showNotice("Датасет загружен.", "success");
+      showNotice(
+        created?.yamlReady
+          ? "Датасет загружен, data.yaml настроен."
+          : "Датасет загружен. data.yaml пока не настроен.",
+        created?.yamlReady ? "success" : "warning"
+      );
       await renderDatasetsPage();
     } catch (error) {
       showNotice(error.message || "Не удалось загрузить датасет.", "error");
@@ -1153,9 +1405,22 @@ async function renderDatasetsPage() {
   appendTrainingMonitorLog(trainingMonitorLine("Подготовка параметров запуска"));
 
   try {
-    const payload = serializeForm(form);
-    if (payload.budget !== "") payload.budget = Number(payload.budget);
+    if (!datasetDetail?.yamlPath) {
+      throw new Error("Dataset YAML is not configured. Open Settings and save classes/folders first.");
+    }
 
+    const payload = serializeForm(form);
+
+    const hyperparams = collectHyperparams();
+    if (Object.keys(hyperparams).length > 0) {
+      payload.hyperparams = hyperparams;
+      appendTrainingMonitorLog(trainingMonitorLine(`Добавлено ${Object.keys(hyperparams).length} гиперпараметров`));
+    }
+    if (payload.searchAlg === "RandomSearch") {
+      const iterations = payload.randomSearchIterations || 10;
+      payload.randomSearchIterations = iterations;
+      appendTrainingMonitorLog(trainingMonitorLine(`RandomSearch: будет сгенерировано ${iterations} комбинаций`));
+    }
     appendTrainingMonitorLog(trainingMonitorLine("Отправка запроса на запуск обучения"));
 
     const response = await api(`/datasets/${state.activeDatasetId}/runs`, {
@@ -1205,6 +1470,31 @@ async function renderDatasetsPage() {
   state.runTab = "overview";
   window.location.hash = `#runs/${row.dataset.runId}`;
   });
+
+  const searchAlgSelect = qs("#searchAlg");
+  const iterationsGroup = qs("#randomSearchIterationsGroup");
+
+  function toggleIterationsField() {
+    if (searchAlgSelect && iterationsGroup) {
+      const isRandomSearch = searchAlgSelect.value === "RandomSearch";
+      iterationsGroup.style.display = isRandomSearch ? "block" : "none";
+      toggleHyperparamTypes();
+    }
+  }
+
+  if (searchAlgSelect) {
+    searchAlgSelect.addEventListener("change", toggleIterationsField);
+    toggleIterationsField(); 
+  }
+
+  const addBtn = qs("#addHyperparamBtn");
+  if (addBtn) {
+    addBtn.removeEventListener("click", addHyperparamRow);
+    addBtn.addEventListener("click", () => {
+      addHyperparamRow();
+      toggleHyperparamTypes();
+    });
+  }
 }
 
 function renderRunsPage() {
@@ -1267,8 +1557,8 @@ function renderRunsPage() {
                       <th>Finished</th>
                       <th>Best model</th>
                       <th>mAP</th>
-                      <th>Budget</th>
                       <th>Device</th>
+                      <th>Search Algorithm</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1290,8 +1580,8 @@ function renderRunsPage() {
                             <td>${escapeHtml(formatDateTime(run.finishedAt))}</td>
                             <td>${escapeHtml(run.bestModel || "—")}</td>
                             <td>${metricValue(run.bestMap, 2)}</td>
-                            <td>${escapeHtml(String(run.budget ?? "—"))}</td>
                             <td>${escapeHtml(run.device || run.gpu || "—")}</td>
+                            <td>${escapeHtml(run.searchAlgorithm || "—")}</td>
                           </tr>
                         `
                       )
@@ -1367,8 +1657,8 @@ function renderRunOverview(detail) {
                 <tr><th>Started</th><td>${escapeHtml(formatDateTime(detail.startedAt))}</td></tr>
                 <tr><th>Finished</th><td>${escapeHtml(formatDateTime(detail.finishedAt))}</td></tr>
                 <tr><th>Metric</th><td>${escapeHtml(detail.targetMetric || "—")}</td></tr>
-                <tr><th>Budget</th><td>${escapeHtml(String(detail.budget ?? "—"))}</td></tr>
                 <tr><th>Device</th><td>${escapeHtml(detail.device || detail.gpu || "—")}</td></tr>
+                <tr><th>Search Algorithm</th><td>${escapeHtml(detail.searchAlgorithm || "—")}</td></tr>
               </tbody>
             </table>
           </div>
@@ -2074,6 +2364,90 @@ async function renderSettingsPage() {
 
           <div class="form-grid">
             <div class="form-group">
+              <label for="settingsClassesCount">Classes Count</label>
+              <input
+                id="settingsClassesCount"
+                name="classesCount"
+                type="number"
+                min="1"
+                value="${escapeHtml(String(detail.classesCount || ""))}"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="settingsClassNames">Class Names</label>
+              <input
+                id="settingsClassNames"
+                name="classNames"
+                type="text"
+                value="${escapeHtml(Array.isArray(detail.classes) ? detail.classes.join(", ") : "")}"
+                placeholder="person, car, ball"
+              />
+            </div>
+          </div>
+
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="settingsTrainFolder">Train Folder</label>
+              <input
+                id="settingsTrainFolder"
+                name="trainFolder"
+                type="text"
+                value="${escapeHtml(detail.trainFolder || "")}"
+                placeholder="train/images"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="settingsValFolder">Validation Folder</label>
+              <input
+                id="settingsValFolder"
+                name="valFolder"
+                type="text"
+                value="${escapeHtml(detail.valFolder || "")}"
+                placeholder="valid/images"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="settingsTestFolder">Test Folder</label>
+              <input
+                id="settingsTestFolder"
+                name="testFolder"
+                type="text"
+                value="${escapeHtml(detail.testFolder || "")}"
+                placeholder="test/images"
+              />
+            </div>
+          </div>
+
+          <div class="helper-text">
+            Saving these fields regenerates <code>data.yaml</code> for the selected dataset.
+          </div>
+
+          ${
+            detail.yamlPath
+              ? `
+                <div class="form-group">
+                  <label for="settingsYamlPath">Current data.yaml</label>
+                  <input id="settingsYamlPath" type="text" value="${escapeHtml(detail.yamlPath)}" readonly />
+                </div>
+                <textarea
+                  class="logs-box"
+                  readonly
+                  spellcheck="false"
+                  style="height:220px; min-height:220px;"
+                >${escapeHtml(detail.yamlContent || "")}</textarea>
+              `
+              : `
+                <div class="notice warning">
+                  data.yaml is not configured yet. Fill in classes and folders, then save.
+                </div>
+              `
+          }
+
+          <div class="form-grid">
+            <div class="form-group">
               <label for="settingsMetric">Метрика</label>
               <select id="settingsMetric" name="targetMetric" ${
                 detail.availableMetrics?.length ? "" : "disabled"
@@ -2089,12 +2463,6 @@ async function renderSettingsPage() {
               </select>
             </div>
 
-            <div class="form-group">
-              <label for="settingsBudget">Budget</label>
-              <input id="settingsBudget" name="budget" type="number" min="1" value="${escapeHtml(
-                String(detail.settings?.budget ?? "")
-              )}" />
-            </div>
           </div>
 
           <div class="form-grid">
@@ -2149,8 +2517,6 @@ async function renderSettingsPage() {
 
     try {
       const payload = serializeForm(form);
-      if (payload.budget !== "") payload.budget = Number(payload.budget);
-
       await api(`/datasets/${payload.datasetId}/settings`, {
         method: "PUT",
         body: payload,
@@ -2159,7 +2525,7 @@ async function renderSettingsPage() {
       delete state.datasetDetails[String(payload.datasetId)];
       await refreshCoreData();
       state.activeDatasetId = payload.datasetId;
-      showNotice("Настройки сохранены.", "success");
+      showNotice("Настройки сохранены. YAML обновлен.", "success");
       await renderSettingsPage();
     } catch (error) {
       showNotice(error.message || "Не удалось сохранить настройки.", "error");
@@ -2269,5 +2635,5 @@ if (typeof module === "object" && module.exports) {
     startDummyStatusPolling,
     normalizeDummyStatus,
     applyDummyStatus,
-  };
+    };
 }
