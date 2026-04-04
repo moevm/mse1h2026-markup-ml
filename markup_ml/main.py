@@ -1,3 +1,4 @@
+import time
 from copy import deepcopy
 from datetime import datetime, timezone
 from itertools import count
@@ -72,6 +73,11 @@ COMMON_DATASET_LAYOUTS = (
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def run_automl() -> None:
+    time.sleep(10)
+    print("AutoML task completed")
 
 
 def next_dataset_id() -> str:
@@ -912,6 +918,13 @@ async def export_run(run_id: str, format: Optional[str] = "json"):
     return JSONResponse(detail)
 
 
+@app.post("/api/start")
+async def start_automl(background_tasks: BackgroundTasks):
+    background_tasks.add_task(run_automl)
+    return {"message": "AutoML process started", "status": "200"}
+
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 Path("runs").mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/runs", StaticFiles(directory="runs"), name="runs")
