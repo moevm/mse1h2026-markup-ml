@@ -12,8 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class StatusManager:
-    def __init__(self, status_file: str = "status.json"):
-        file_path = Path(status_file)
+    def __init__(self, status_file: str = "runs/status.json"):
+        status_path = os.getenv("STATUS_FILE", status_file)
+        file_path = Path(status_path)
         if file_path.is_absolute():
             self.status_file = file_path
         else:

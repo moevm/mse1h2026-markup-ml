@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from itertools import count
 from pathlib import Path
 from typing import Any, Optional
+import os
 import shutil
 import zipfile
 
@@ -15,6 +16,11 @@ from fastapi.staticfiles import StaticFiles
 from app.core.hyperparameter_search import grid_search_params
 from app.core.orc import AutoMLOrchestrator
 from app.core.random_search_combinations import random_search_params
+
+try:
+    import torch
+except ModuleNotFoundError:
+    torch = None
 
 try:
     import yaml as yaml_module
@@ -436,21 +442,27 @@ def build_empty_run_detail(
     }
 
 
-def normalize_training_device(device: Optional[str]) -> Optional[str | int]:
-    if not device:
-        return None
+def runtime_gpu_available() -> bool:
+    try:
+        return bool(torch is not None and torch.cuda.is_available())
+    except Exception:
+        return False
 
-    normalized = str(device).strip().lower()
+
+def normalize_training_device(device: Optional[str]) -> str | int:
+    requested = device or os.getenv("AUTOML_DEVICE", "auto")
+    normalized = str(requested).strip().lower()
+
     if not normalized or normalized == "auto":
-        return None
+        return 0 if runtime_gpu_available() else "cpu"
     if normalized == "cpu":
         return "cpu"
     if normalized == "gpu0":
-        return 0
+        return 0 if runtime_gpu_available() else "cpu"
     if normalized == "gpu1":
-        return 1
+        return 1 if runtime_gpu_available() and (torch is None or torch.cuda.device_count() > 1) else "cpu"
 
-    return device
+    return requested
 
 
 def run_summary_from_detail(detail: dict[str, Any]) -> dict[str, Any]:
@@ -818,10 +830,7 @@ def run_training_task(
                 combination["device"] = training_device
 
         append_to_run_log(run_id, f"Generated {len(hyperparams_combinations)} combinations")
-        if training_device is not None:
-            append_to_run_log(run_id, f"Resolved training device: {training_device}")
-        else:
-            append_to_run_log(run_id, "Resolved training device: default/auto")
+        append_to_run_log(run_id, f"Resolved training device: {training_device}")
 
         if run_id in RUN_DETAILS:
             RUN_DETAILS[run_id]["status"] = "running"
