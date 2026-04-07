@@ -884,3 +884,24 @@ textarea:focus {
 .hyperparam-row input[type="hidden"] {
   display: none;
 }
+
+.artifact-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 6px;
+  border-radius: 16px;
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(76, 99, 234, 0.18);
+}
+
+.artifact-download-btn:hover {
+  transform: translateY(-1px);
+}
+
+.chart-card .artifact-download-btn {
+  margin-top: 10px;
+}

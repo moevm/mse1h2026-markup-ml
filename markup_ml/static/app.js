@@ -3,6 +3,9 @@ const LOGS_POLL_INTERVAL_MS = 2000;
 const STATUS_POLL_INTERVAL_MS = 3000;
 const DUMMY_STATUS_URL = "/mocks/dummy_status.json";
 
+const TEST_CHART_URL = "/assets/test_chart.png";
+const TEST_MODEL_URL = "/assets/dummy.pt";
+
 const state = {
   dashboard: null,
   datasets: [],
@@ -1831,6 +1834,26 @@ function renderRunEdge(detail) {
   `;
 }
 
+function applyCompletedRunArtifacts() {
+  const block = qs("#runArtifactsBlock");
+  const chart = qs("#resultChart");
+  const link = qs("#downloadModel");
+
+  if (block) {
+    block.hidden = false;
+  }
+
+  if (chart) {
+    chart.src = `${TEST_CHART_URL}?t=${Date.now()}`;
+  }
+
+  if (link) {
+    link.href = TEST_MODEL_URL;
+    link.setAttribute("download", "dummy.pt");
+    link.textContent = "Скачать dummy.pt";
+  }
+}
+
 function startRunLogsPolling(runId, textareaId, statusId, live, onUpdate) {
   const textarea = qs(`#${textareaId}`);
   const statusEl = qs(`#${statusId}`);
@@ -1838,6 +1861,7 @@ function startRunLogsPolling(runId, textareaId, statusId, live, onUpdate) {
 
   let timerId = null;
   let lastText = null;
+  let artifactsApplied = false;
 
   const pushUpdate = (payload) => {
     if (typeof onUpdate === "function") {
@@ -1860,9 +1884,40 @@ function startRunLogsPolling(runId, textareaId, statusId, live, onUpdate) {
         pushUpdate({ text });
       }
 
+      const runDetail = await api(`/runs/${runId}`);
+      const currentStatus = String(runDetail?.status || "").toLowerCase();
+      const isCompletedStatus = ["completed", "finished"].includes(currentStatus);
+
+      if (isCompletedStatus) {
+        applyCompletedRunArtifacts();
+        artifactsApplied = true;
+
+        const completedText = "Обучение завершено";
+        if (statusEl) statusEl.textContent = completedText;
+        pushUpdate({ statusText: completedText, completed: true });
+
+        state.runDetails[String(runId)] = runDetail;
+        refreshCoreData().catch(() => {});
+
+        if (timerId) {
+          clearInterval(timerId);
+          timerId = null;
+        }
+
+        return;
+      }
+
       const updatedText = `Обновлено: ${new Date().toLocaleTimeString()}`;
       if (statusEl) statusEl.textContent = updatedText;
       pushUpdate({ statusText: updatedText });
+
+      if (artifactsApplied) {
+        const block = qs("#runArtifactsBlock");
+        if (block) {
+          block.hidden = true;
+        }
+        artifactsApplied = false;
+      }
     } catch (error) {
       const errorText = `Ошибка: ${error.message}`;
       if (statusEl) statusEl.textContent = errorText;
@@ -1893,6 +1948,32 @@ function renderRunLogs() {
 
       <textarea id="runLogsTextarea" class="logs-box" readonly spellcheck="false"></textarea>
       <div id="runLogsStatus" class="logs-status"></div>
+
+      <div id="runArtifactsBlock" hidden style="margin-top:16px;">
+        <div class="chart-grid">
+          <article class="chart-card">
+            <div class="chart-title">Тестовый график</div>
+            <img
+              id="resultChart"
+              src=""
+              alt="Test chart"
+              style="display:block; width:100%; max-width:100%; border-radius:16px; border:1px solid var(--line); background:#fff;"
+            />
+          </article>
+
+          <article class="chart-card">
+            <div class="chart-title">Тестовая модель</div>
+            <a
+              id="downloadModel"
+              href="#"
+              download="dummy.pt"
+              class="btn btn-primary artifact-download-btn"
+            >
+              Скачать dummy.pt
+            </a>
+          </article>
+        </div>
+      </div>
     </section>
   `;
 }
