@@ -1,7 +1,16 @@
-const API_BASE = "/api";
+const BASE_URL = "";
 const LOGS_POLL_INTERVAL_MS = 2000;
 const STATUS_POLL_INTERVAL_MS = 3000;
-const DUMMY_STATUS_URL = "/mocks/dummy_status.json";
+
+function buildApiUrl(path) {
+  return `${BASE_URL}/api${path}`;
+}
+
+function buildStaticUrl(path) {
+  return `${BASE_URL}${path}`;
+}
+
+const DUMMY_STATUS_URL = buildStaticUrl("/mocks/dummy_status.json");
 
 const TEST_CHART_URL = "/assets/test_chart.png";
 const TEST_MODEL_URL = "/assets/dummy.pt";
@@ -121,7 +130,7 @@ function cleanupSideEffects() {
 }
 
 async function api(path, options = {}) {
-  const url = `${API_BASE}${path}`;
+  const url = buildApiUrl(path);
   const init = {
     method: options.method || "GET",
     headers: {
@@ -1154,7 +1163,7 @@ async function renderDatasetsPage() {
                         <div class="form-actions" style="margin-bottom:12px;">
                           <a
                             class="btn btn-secondary"
-                            href="${API_BASE}/datasets/${encodeURIComponent(datasetDetail.id)}/yaml"
+                            href="${buildApiUrl(`/datasets/${encodeURIComponent(datasetDetail.id)}/yaml`)}"
                             download="data.yaml"
                           >Download data.yaml</a>
                         </div>
@@ -2368,12 +2377,13 @@ function renderExportsPage() {
                         </div>
 
                         <div class="form-actions" style="margin-top:14px;">
-                          <a class="btn btn-primary" href="${API_BASE}/exports/runs/${encodeURIComponent(
+                          <a class="btn btn-primary" href="${buildApiUrl(`/exports/runs/${encodeURIComponent(
                             run.id
-                          )}?format=json" download>JSON</a>
-                          <a class="btn btn-secondary" href="${API_BASE}/exports/runs/${encodeURIComponent(
+                          )}?format=json`)}" download>JSON</a>
+
+                          <a class="btn btn-secondary" href="${buildApiUrl(`/exports/runs/${encodeURIComponent(
                             run.id
-                          )}?format=yaml" download>YAML</a>
+                          )}?format=yaml`)}" download>YAML</a>
                         </div>
                       </article>
                     `
