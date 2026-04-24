@@ -1,0 +1,35 @@
+# Git / editor
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Node test dependencies
+node_modules/
+tests/js/node_modules/
+
+# Runtime data mounted by docker-compose
+runs/
+uploads/
+datasets/
+exports/
+status.json
+
+# Local datasets / model artifacts
+*.pt
+*.onnx
+*.engine
+*.zip
+*.rar
+
+# Tests are not needed in the production image
+tests/

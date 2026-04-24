@@ -8,12 +8,17 @@ services:
       - "8000:8000"
     environment:
       AUTOML_DEVICE: auto
+      RUNS_DIR: /app/runs
+      UPLOADS_DIR: /app/uploads
+      DATASETS_DIR: /app/datasets
+      DATASETS_ROOTS: /app/datasets,/app/uploads/datasets
       STATUS_FILE: /app/runs/status.json
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     volumes:
       - ./runs:/app/runs
       - ./uploads:/app/uploads
+      - ./datasets:/app/datasets
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')"]

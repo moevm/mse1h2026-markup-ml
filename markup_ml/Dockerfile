@@ -18,7 +18,7 @@ RUN apt-get update \
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-RUN mkdir -p /app/app/core /app/static /app/runs /app/uploads /app/exports \
+RUN mkdir -p /app/app/core /app/static /app/runs /app/uploads /app/uploads/datasets /app/datasets /app/exports \
     && touch /app/app/__init__.py /app/app/core/__init__.py
 
 COPY main.py /app/main.py
