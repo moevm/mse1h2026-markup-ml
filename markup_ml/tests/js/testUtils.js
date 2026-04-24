@@ -69,6 +69,8 @@ function createBaseState() {
         device: "auto",
         priority: "normal",
       },
+      yamlPath: "/app/datasets/retail/data.yaml",
+      yamlContent: "path: /app/datasets/retail\ntrain: train/images\nval: val/images\nnc: 2\nnames: [person, box]\n",
       bestModels: [
         { name: "yolo-s", map: 0.81, fps: 62, sizeMb: 22 },
         { name: "yolo-m", map: 0.79, fps: 44, sizeMb: 48 },
@@ -94,6 +96,8 @@ function createBaseState() {
         device: "gpu0",
         priority: "normal",
       },
+      yamlPath: "/app/datasets/traffic/data.yaml",
+      yamlContent: "path: /app/datasets/traffic\ntrain: train/images\nval: val/images\nnc: 3\nnames: [car, person, bus]\n",
       bestModels: [
         { name: "yolo-m", map: 0.84, fps: 41, sizeMb: 48 },
         { name: "yolo-s", map: 0.80, fps: 60, sizeMb: 22 },
@@ -151,6 +155,13 @@ function createBaseState() {
       targetMetric: "mAP@50",
       budget: 20,
       device: "gpu0",
+      searchAlgorithm: "GridSearch",
+      errorMessage: null,
+      artifacts: {
+        bestModelUrl: "/runs/detect/run-1/trial_000/weights/best.pt",
+        lastModelUrl: "/runs/detect/run-1/trial_000/weights/last.pt",
+        resultsPlotUrl: "/runs/detect/run-1/trial_000/results.png",
+      },
       summary: {
         bestModel: "yolo-s",
         bestMap: 0.81,
@@ -211,6 +222,13 @@ function createBaseState() {
       targetMetric: "mAP@50",
       budget: 16,
       device: "gpu1",
+      searchAlgorithm: "GridSearch",
+      errorMessage: null,
+      artifacts: {
+        bestModelUrl: "/runs/detect/run-2/trial_000/weights/best.pt",
+        lastModelUrl: "/runs/detect/run-2/trial_000/weights/last.pt",
+        resultsPlotUrl: "/runs/detect/run-2/trial_000/results.png",
+      },
       summary: {
         bestModel: "yolo-m",
         bestMap: 0.79,
@@ -246,6 +264,13 @@ function createBaseState() {
       targetMetric: "mAP@50-95",
       budget: 24,
       device: "gpu0",
+      searchAlgorithm: "RandomSearch",
+      errorMessage: null,
+      artifacts: {
+        bestModelUrl: null,
+        lastModelUrl: null,
+        resultsPlotUrl: null,
+      },
       summary: {
         bestModel: "yolo-m",
         bestMap: 0.84,
@@ -289,12 +314,22 @@ function createBaseState() {
     "run-3": "run-3 logs",
   };
 
+  const statusPayload = {
+    current_model: 1,
+    total_models: 3,
+    status: "running",
+    runId: "run-3",
+    error: null,
+    updatedAt: "2026-02-10T13:05:00Z",
+  };
+
   return {
     datasets,
     datasetDetails,
     runs,
     runDetails,
     runLogs,
+    statusPayload,
     nextDatasetIndex: 3,
     nextRunIndex: 4,
   };
@@ -341,6 +376,14 @@ function createApiMock() {
       });
     }
 
+    if (normalizedUrl.startsWith("/api/status") && method === "GET") {
+      return jsonResponse({
+        ...state.statusPayload,
+        modelNumber: state.statusPayload.current_model,
+        totalCount: state.statusPayload.total_models,
+      });
+    }
+
     if (normalizedUrl === "/api/datasets" && method === "GET") {
       return jsonResponse(state.datasets);
     }
@@ -366,7 +409,14 @@ function createApiMock() {
         targetMetric: payload.targetMetric,
         budget: payload.budget,
         device: payload.device,
+        searchAlgorithm: payload.searchAlg,
         notes: payload.notes,
+        errorMessage: null,
+        artifacts: {
+          bestModelUrl: null,
+          lastModelUrl: null,
+          resultsPlotUrl: null,
+        },
         summary: {
           bestModel: null,
           bestMap: null,
@@ -393,9 +443,22 @@ function createApiMock() {
 
       state.runLogs[newRunId] = `Run created: ${newRunId}`;
       dataset.lastRunAt = detail.startedAt;
+      dataset.status = "running";
+      state.statusPayload = {
+        current_model: 0,
+        total_models: 0,
+        status: "queued",
+        runId: newRunId,
+        error: null,
+        updatedAt: "2026-03-12T10:00:00Z",
+      };
       updateDatasetSummary(state, datasetId);
 
-      return jsonResponse({ runId: newRunId });
+      return jsonResponse({
+        runId: newRunId,
+        statusUrl: "/api/status",
+        runUrl: `/api/runs/${newRunId}`,
+      });
     }
 
     const datasetSettingsMatch = normalizedUrl.match(/^\/api\/datasets\/([^/]+)\/settings$/);
@@ -424,6 +487,7 @@ function createApiMock() {
       const taskType = formData.get("taskType");
       const description = formData.get("description");
       const datasetFile = formData.get("datasetFile");
+      const datasetSource = String(formData.get("datasetSource") || "").trim();
 
       const newDatasetId = `ds-${state.nextDatasetIndex++}`;
       state.datasetDetails[newDatasetId] = {
@@ -447,15 +511,18 @@ function createApiMock() {
           device: "auto",
           priority: "normal",
         },
+        yamlPath: datasetSource ? `/app/datasets/${datasetSource}/data.yaml` : "/app/datasets/new-dataset/data.yaml",
+        yamlContent: "path: /app/datasets/new-dataset\ntrain: train/images\nval: val/images\nnc: 1\nnames: [class_0]\n",
         bestModels: [],
-        sourceFilename: datasetFile?.name || null,
+        sourceFilename: datasetFile?.name || datasetSource || null,
       };
 
       updateDatasetSummary(state, newDatasetId);
 
       return jsonResponse({
         id: newDatasetId,
-        filename: datasetFile?.name || "dataset.zip",
+        filename: datasetFile?.name || datasetSource || "dataset.zip",
+        yamlReady: true,
       });
     }
 
