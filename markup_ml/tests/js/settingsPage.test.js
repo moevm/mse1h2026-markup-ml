@@ -20,7 +20,6 @@ describe("settings page", () => {
 
     form.querySelector("#settingsName").value = "Retail Detection Updated";
     form.querySelector("#settingsDescription").value = "Updated description";
-    form.querySelector("#settingsBudget").value = "32";
     form.querySelector("#settingsDevice").value = "gpu1";
     form.querySelector("#settingsPriority").value = "high";
 
@@ -53,7 +52,6 @@ describe("settings page", () => {
 
     expect(payload.name).toBe("Retail Detection Updated");
     expect(payload.description).toBe("Updated description");
-    expect(payload.budget).toBe(32);
     expect(payload.device).toBe("gpu1");
     expect(payload.priority).toBe("high");
   });

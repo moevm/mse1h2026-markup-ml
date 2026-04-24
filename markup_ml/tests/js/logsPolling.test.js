@@ -38,7 +38,7 @@ describe("мониторинг логов", () => {
       text: async () => "LOGS",
     }));
 
-    const text = await fetchLogs("mocks/dummy_logs.txt");
+    const text = await fetchLogs("/api/runs/run-1/logs");
 
     expect(text).toBe("LOGS");
     expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -60,7 +60,7 @@ describe("мониторинг логов", () => {
     const stop = startLogsPolling({
       textareaId: "logs-textarea",
       statusId: "logs-status",
-      url: "mocks/dummy_logs.txt",
+      url: "/api/runs/run-1/logs",
       intervalMs: 1000,
     });
 

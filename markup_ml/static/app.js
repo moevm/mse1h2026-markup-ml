@@ -10,14 +10,10 @@ function buildStaticUrl(path) {
   return `${BASE_URL}${path}`;
 }
 
-const DUMMY_STATUS_URL = buildStaticUrl("/mocks/dummy_status.json");
-
-const TEST_CHART_URL = "/assets/test_chart.png";
-const TEST_MODEL_URL = "/assets/dummy.pt";
-
 const state = {
   dashboard: null,
   datasets: [],
+  datasetSources: [],
   runs: [],
   datasetDetails: {},
   runDetails: {},
@@ -26,10 +22,11 @@ const state = {
   compareDatasetId: null,
   compareRunIds: [],
   runTab: "overview",
-  dummyStatus: {
+  automlStatus: {
     modelNumber: "—",
     totalCount: "—",
     status: "unknown",
+    error: null,
   },
   trainingMonitor: {
     visible: false,
@@ -88,7 +85,7 @@ function statusClass(status) {
   if (["finished", "ready", "completed"].includes(value)) return "finished";
   if (value === "running") return "running";
   if (value === "queued") return "queued";
-  if (value === "failed") return "failed";
+  if (["failed", "error"].includes(value)) return "failed";
   return "running";
 }
 
@@ -224,6 +221,14 @@ async function refreshCoreData() {
     !state.runs.some((run) => String(run.id) === String(state.activeRunId))
   ) {
     state.activeRunId = state.runs[0]?.id || null;
+  }
+}
+
+async function refreshDatasetSources() {
+  try {
+    state.datasetSources = ensureArray(await api("/dataset-sources"));
+  } catch (error) {
+    state.datasetSources = [];
   }
 }
 
@@ -503,107 +508,32 @@ function startLogsPolling(opts) {
   };
 }
 
-function normalizeDummyStatus(payload = {}) {
+function normalizeAutomlStatus(payload = {}) {
   return {
-    modelNumber: payload.modelNumber ?? payload.model_number ?? payload.model ?? "—",
-    totalCount: payload.totalCount ?? payload.total_count ?? payload.total ?? "—",
+    modelNumber:
+      payload.modelNumber ??
+      payload.current_model ??
+      payload.model_number ??
+      payload.model ??
+      "—",
+    totalCount:
+      payload.totalCount ??
+      payload.total_models ??
+      payload.total_count ??
+      payload.total ??
+      "—",
     status: payload.status ?? "unknown",
+    error: payload.error ?? null,
+    runId: payload.runId ?? payload.run_id ?? null,
   };
 }
 
-async function fetchDummyStatus() {
-  const url = `${DUMMY_STATUS_URL}${DUMMY_STATUS_URL.includes("?") ? "&" : "?"}t=${Date.now()}`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
-  return normalizeDummyStatus(data);
+async function fetchAutomlStatus() {
+  const data = await api(`/status?t=${Date.now()}`);
+  return normalizeAutomlStatus(data);
 }
 
-function renderDummyStatusCard() {
-  const data = normalizeDummyStatus(state.dummyStatus);
 
-  return `
-    <section class="card">
-      <div class="card-header">
-        <div>
-          <h2 class="card-title">Статус модели</h2>
-          <p class="card-subtitle">Обновление каждые 3 секунды из dummy_status.json</p>
-        </div>
-      </div>
-
-      <div class="grid-4">
-        <div class="kpi">
-          <div class="kpi-label">Номер модели</div>
-          <div class="kpi-value" id="dummyStatusModel">${escapeHtml(String(data.modelNumber))}</div>
-          <div class="kpi-note">Источник: dummy_status.json</div>
-        </div>
-
-        <div class="kpi">
-          <div class="kpi-label">Общее количество</div>
-          <div class="kpi-value" id="dummyStatusTotal">${escapeHtml(String(data.totalCount))}</div>
-          <div class="kpi-note">Текущее значение</div>
-        </div>
-
-        <div class="kpi">
-          <div class="kpi-label">Статус</div>
-          <div class="kpi-value" id="dummyStatusValue">${renderStatus(data.status)}</div>
-          <div class="kpi-note" id="dummyStatusUpdated">Ожидание обновления...</div>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function applyDummyStatus(data) {
-  const normalized = normalizeDummyStatus(data);
-  state.dummyStatus = normalized;
-
-  const modelEl = qs("#dummyStatusModel");
-  const totalEl = qs("#dummyStatusTotal");
-  const statusEl = qs("#dummyStatusValue");
-  const updatedEl = qs("#dummyStatusUpdated");
-
-  if (modelEl) modelEl.textContent = String(normalized.modelNumber);
-  if (totalEl) totalEl.textContent = String(normalized.totalCount);
-  if (statusEl) statusEl.innerHTML = renderStatus(normalized.status);
-
-  if (updatedEl) {
-    updatedEl.textContent = `Обновлено: ${new Date().toLocaleTimeString("ru-RU")}`;
-  }
-}
-
-function startDummyStatusPolling() {
-  let timerId = null;
-
-  const tick = async () => {
-    try {
-      const data = await fetchDummyStatus();
-      applyDummyStatus(data);
-    } catch (error) {
-      const updatedEl = qs("#dummyStatusUpdated");
-      if (updatedEl) {
-        updatedEl.textContent = `Ошибка: ${error.message}`;
-      }
-    }
-  };
-
-  tick();
-  timerId = setInterval(tick, STATUS_POLL_INTERVAL_MS);
-
-  return () => {
-    if (timerId) clearInterval(timerId);
-  };
-}
 function renderTrainingMonitorBlock() {
   const monitor = state.trainingMonitor || {};
   const hiddenAttr = monitor.visible ? "" : "hidden";
@@ -718,12 +648,6 @@ function trainingMonitorLine(message) {
   return `[${new Date().toLocaleTimeString("ru-RU")}] ${message}`;
 }
 
-function mockStartTraining(data) {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve({ status: "started" }), 1000);
-  });
-}
-
 function bestCellClass(values, current, lowerIsBetter = false) {
   const numeric = values.map(Number).filter((v) => !Number.isNaN(v));
   if (!numeric.length || Number.isNaN(Number(current))) return "";
@@ -758,7 +682,7 @@ function renderDashboardPage() {
         ${renderKpi("Queued", String(summary.queuedCount), "В очереди")}
       </section>
 
-      ${renderDummyStatusCard()}
+      ${renderAutomlStatusCard()}
 
       <section class="card">
         <div class="card-header">
@@ -885,7 +809,7 @@ function renderDashboardPage() {
     window.location.hash = `#runs/${row.dataset.runId}`;
   });
 
-  stopStatusPolling = startDummyStatusPolling();
+  stopStatusPolling = startAutomlStatusPolling();
 }
 
 
@@ -1025,6 +949,16 @@ async function renderDatasetsPage() {
   const datasetRuns = activeId ? getRunsByDataset(activeId).slice(0, 5) : [];
   const yamlReady = Boolean(datasetDetail?.yamlPath);
 
+  await refreshDatasetSources();
+  const datasetSourceOptions = state.datasetSources
+    .map((source) => {
+      const labelParts = [source.name || source.relativePath || source.id];
+      if (source.sourceType) labelParts.push(source.sourceType);
+      if (source.trainFolder && source.valFolder) labelParts.push("train/val найден");
+      return `<option value="${escapeHtml(source.id)}">${escapeHtml(labelParts.filter(Boolean).join(" · "))}</option>`;
+    })
+    .join("");
+
   renderRoot(`
     <div class="page-stack">
       <section class="grid-2">
@@ -1067,8 +1001,23 @@ async function renderDatasetsPage() {
             </div>
 
             <div class="form-group">
+              <label for="datasetSource">Датасет из папки <code>datasets/</code></label>
+              <select id="datasetSource" name="datasetSource">
+                <option value="">Не выбирать — загружу файл</option>
+                ${datasetSourceOptions}
+              </select>
+              <div class="helper-text">
+                Не нужно вводить путь вручную. Положите датасет в папку <code>datasets/</code>
+                на хосте, и он появится в этом списке.
+              </div>
+            </div>
+
+            <div class="form-group">
               <label for="datasetFile">Файл датасета</label>
-              <input id="datasetFile" name="datasetFile" type="file" accept=".zip,.yaml,.yml,.json" required  />
+              <input id="datasetFile" name="datasetFile" type="file" accept=".zip,.yaml,.yml" />
+              <div class="helper-text">
+                Используйте файл, если датасета ещё нет в списке выше.
+              </div>
             </div>
 
             <div class="form-actions">
@@ -1373,6 +1322,28 @@ async function renderDatasetsPage() {
 
     try {
       const formData = new FormData(form);
+      const datasetSourceValue = String(formData.get("datasetSource") || "").trim();
+      const datasetFileValue = formData.get("datasetFile");
+      const hasDatasetFile =
+        typeof File !== "undefined" &&
+        datasetFileValue instanceof File &&
+        datasetFileValue.name &&
+        datasetFileValue.size >= 0;
+
+      if (!datasetSourceValue && !hasDatasetFile) {
+        throw new Error("Выберите датасет из списка или загрузите архив / YAML файл.");
+      }
+
+      if (datasetSourceValue) {
+        formData.set("datasetSource", datasetSourceValue);
+      } else {
+        formData.delete("datasetSource");
+      }
+
+      if (!hasDatasetFile) {
+        formData.delete("datasetFile");
+      }
+
       const created = await api("/datasets", {
         method: "POST",
         body: formData,
@@ -1457,7 +1428,7 @@ async function renderDatasetsPage() {
     }
 
     state.activeRunId = runId;
-    state.runTab = "overview";
+    state.runTab = "logs";
     state.trainingMonitor.runId = runId;
 
     setTrainingMonitorStatus("Запуск создан");
@@ -1843,149 +1814,16 @@ function renderRunEdge(detail) {
   `;
 }
 
-function applyCompletedRunArtifacts() {
-  const block = qs("#runArtifactsBlock");
-  const chart = qs("#resultChart");
-  const link = qs("#downloadModel");
-
-  if (block) {
-    block.hidden = false;
-  }
-
-  if (chart) {
-    chart.src = `${TEST_CHART_URL}?t=${Date.now()}`;
-  }
-
-  if (link) {
-    link.href = TEST_MODEL_URL;
-    link.setAttribute("download", "dummy.pt");
-    link.textContent = "Скачать dummy.pt";
+function fileNameFromUrl(url, fallback = "best.pt") {
+  if (!url) return fallback;
+  try {
+    const clean = String(url).split("?")[0];
+    return decodeURIComponent(clean.split("/").pop() || fallback);
+  } catch {
+    return fallback;
   }
 }
 
-function startRunLogsPolling(runId, textareaId, statusId, live, onUpdate) {
-  const textarea = qs(`#${textareaId}`);
-  const statusEl = qs(`#${statusId}`);
-  if (!textarea) return () => {};
-
-  let timerId = null;
-  let lastText = null;
-  let artifactsApplied = false;
-
-  const pushUpdate = (payload) => {
-    if (typeof onUpdate === "function") {
-      onUpdate(payload);
-    }
-  };
-
-  const load = async () => {
-    try {
-      const loadingText = "Загрузка логов...";
-      if (statusEl) statusEl.textContent = loadingText;
-      pushUpdate({ statusText: loadingText });
-
-      const text = await api(`/runs/${runId}/logs`, { asText: true });
-
-      if (text !== lastText) {
-        textarea.value = text;
-        textarea.scrollTop = textarea.scrollHeight;
-        lastText = text;
-        pushUpdate({ text });
-      }
-
-      const runDetail = await api(`/runs/${runId}`);
-      const currentStatus = String(runDetail?.status || "").toLowerCase();
-      const isCompletedStatus = ["completed", "finished"].includes(currentStatus);
-
-      if (isCompletedStatus) {
-        applyCompletedRunArtifacts();
-        artifactsApplied = true;
-
-        const completedText = "Обучение завершено";
-        if (statusEl) statusEl.textContent = completedText;
-        pushUpdate({ statusText: completedText, completed: true });
-
-        state.runDetails[String(runId)] = runDetail;
-        refreshCoreData().catch(() => {});
-
-        if (timerId) {
-          clearInterval(timerId);
-          timerId = null;
-        }
-
-        return;
-      }
-
-      const updatedText = `Обновлено: ${new Date().toLocaleTimeString()}`;
-      if (statusEl) statusEl.textContent = updatedText;
-      pushUpdate({ statusText: updatedText });
-
-      if (artifactsApplied) {
-        const block = qs("#runArtifactsBlock");
-        if (block) {
-          block.hidden = true;
-        }
-        artifactsApplied = false;
-      }
-    } catch (error) {
-      const errorText = `Ошибка: ${error.message}`;
-      if (statusEl) statusEl.textContent = errorText;
-      pushUpdate({ statusText: errorText });
-    }
-  };
-
-  load();
-
-  if (live) {
-    timerId = setInterval(load, LOGS_POLL_INTERVAL_MS);
-  }
-
-  return () => {
-    if (timerId) clearInterval(timerId);
-  };
-}
-
-function renderRunLogs() {
-  return `
-    <section class="card">
-      <div class="card-header">
-        <div>
-          <h3 class="card-title" style="font-size:20px;">Логи запуска</h3>
-          <p class="card-subtitle">Поток логов для выбранного запуска</p>
-        </div>
-      </div>
-
-      <textarea id="runLogsTextarea" class="logs-box" readonly spellcheck="false"></textarea>
-      <div id="runLogsStatus" class="logs-status"></div>
-
-      <div id="runArtifactsBlock" hidden style="margin-top:16px;">
-        <div class="chart-grid">
-          <article class="chart-card">
-            <div class="chart-title">Тестовый график</div>
-            <img
-              id="resultChart"
-              src=""
-              alt="Test chart"
-              style="display:block; width:100%; max-width:100%; border-radius:16px; border:1px solid var(--line); background:#fff;"
-            />
-          </article>
-
-          <article class="chart-card">
-            <div class="chart-title">Тестовая модель</div>
-            <a
-              id="downloadModel"
-              href="#"
-              download="dummy.pt"
-              class="btn btn-primary artifact-download-btn"
-            >
-              Скачать dummy.pt
-            </a>
-          </article>
-        </div>
-      </div>
-    </section>
-  `;
-}
 
 async function renderRunDetailPage(runId) {
   const detail = await ensureRunDetail(runId);
@@ -2038,6 +1876,13 @@ async function renderRunDetailPage(runId) {
       </section>
     </div>
   `);
+
+  if (detail.errorMessage) {
+    showNotice(
+      detail.status === "finished" ? detail.errorMessage : `Ошибка запуска: ${detail.errorMessage}`,
+      detail.status === "finished" ? "warning" : "error"
+    );
+  }
 
   qsa(".tab-btn").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -2668,6 +2513,268 @@ async function route() {
   }
 }
 
+function formatStatusUpdateTime() {
+  return new Date().toLocaleTimeString("en-US");
+}
+
+function renderAutomlStatusCard() {
+  const data = normalizeAutomlStatus(state.automlStatus);
+
+  return `
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Model Status</h2>
+          <p class="card-subtitle">Live data from status.json via API</p>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="kpi">
+          <div class="kpi-label">Model</div>
+          <div class="kpi-value" id="automlStatusModel">${escapeHtml(String(data.modelNumber))}</div>
+          <div class="kpi-note">Source: /api/status</div>
+        </div>
+
+        <div class="kpi">
+          <div class="kpi-label">Total</div>
+          <div class="kpi-value" id="automlStatusTotal">${escapeHtml(String(data.totalCount))}</div>
+          <div class="kpi-note">Current value</div>
+        </div>
+
+        <div class="kpi">
+          <div class="kpi-label">Status</div>
+          <div class="kpi-value" id="automlStatusValue">${renderStatus(data.status)}</div>
+          <div class="kpi-note" id="automlStatusUpdated">Waiting for update...</div>
+        </div>
+
+        <div class="kpi">
+          <div class="kpi-label">Active Run</div>
+          <div class="kpi-value" id="automlStatusRunId">${escapeHtml(String(data.runId || "-"))}</div>
+          <div class="kpi-note" id="automlStatusError">${escapeHtml(data.error || "No errors")}</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function applyAutomlStatus(data) {
+  const normalized = normalizeAutomlStatus(data);
+  state.automlStatus = normalized;
+
+  const modelEl = qs("#automlStatusModel");
+  const totalEl = qs("#automlStatusTotal");
+  const statusEl = qs("#automlStatusValue");
+  const updatedEl = qs("#automlStatusUpdated");
+  const runIdEl = qs("#automlStatusRunId");
+  const errorEl = qs("#automlStatusError");
+
+  if (modelEl) modelEl.textContent = String(normalized.modelNumber);
+  if (totalEl) totalEl.textContent = String(normalized.totalCount);
+  if (statusEl) statusEl.innerHTML = renderStatus(normalized.status);
+  if (runIdEl) runIdEl.textContent = String(normalized.runId || "-");
+  if (errorEl) errorEl.textContent = normalized.error || "No errors";
+
+  if (updatedEl) {
+    updatedEl.textContent = `Updated: ${formatStatusUpdateTime()}`;
+  }
+}
+
+function startAutomlStatusPolling() {
+  let timerId = null;
+
+  const tick = async () => {
+    try {
+      const data = await fetchAutomlStatus();
+      applyAutomlStatus(data);
+    } catch (error) {
+      const updatedEl = qs("#automlStatusUpdated");
+      if (updatedEl) {
+        updatedEl.textContent = `Error: ${error.message}`;
+      }
+    }
+  };
+
+  tick();
+  timerId = setInterval(tick, STATUS_POLL_INTERVAL_MS);
+
+  return () => {
+    if (timerId) clearInterval(timerId);
+  };
+}
+
+function applyCompletedRunArtifacts(runDetail) {
+  const block = qs("#runArtifactsBlock");
+  const chart = qs("#resultChart");
+  const link = qs("#downloadModel");
+  const artifacts = runDetail?.artifacts || {};
+  const chartUrl = artifacts.resultsPlotUrl ? buildStaticUrl(artifacts.resultsPlotUrl) : "";
+  const modelUrl = artifacts.bestModelUrl || artifacts.lastModelUrl || "";
+
+  if (block) {
+    block.hidden = !chartUrl && !modelUrl;
+  }
+
+  if (chart) {
+    chart.hidden = !chartUrl;
+    if (chartUrl) {
+      chart.src = `${chartUrl}${chartUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
+    } else {
+      chart.removeAttribute("src");
+    }
+  }
+
+  if (link) {
+    link.hidden = !modelUrl;
+    if (modelUrl) {
+      const downloadName = fileNameFromUrl(modelUrl);
+      link.href = buildStaticUrl(modelUrl);
+      link.setAttribute("download", downloadName);
+      link.textContent = `Download ${downloadName}`;
+    }
+  }
+}
+
+function startRunLogsPolling(runId, textareaId, statusId, live, onUpdate) {
+  const textarea = qs(`#${textareaId}`);
+  const statusEl = qs(`#${statusId}`);
+  if (!textarea) return () => {};
+
+  let timerId = null;
+  let lastText = null;
+  let artifactsApplied = false;
+
+  const pushUpdate = (payload) => {
+    if (typeof onUpdate === "function") {
+      onUpdate(payload);
+    }
+  };
+
+  const load = async () => {
+    try {
+      const loadingText = "Loading logs...";
+      if (statusEl) statusEl.textContent = loadingText;
+      pushUpdate({ statusText: loadingText });
+
+      const text = await api(`/runs/${runId}/logs`, { asText: true });
+
+      if (text !== lastText) {
+        textarea.value = text;
+        textarea.scrollTop = textarea.scrollHeight;
+        lastText = text;
+        pushUpdate({ text });
+      }
+
+      const runDetail = await api(`/runs/${runId}`);
+      state.runDetails[String(runId)] = runDetail;
+      const currentStatus = String(runDetail?.status || "").toLowerCase();
+      const isCompletedStatus = ["completed", "finished"].includes(currentStatus);
+      const isErrorStatus = ["failed", "error"].includes(currentStatus);
+
+      if (isCompletedStatus) {
+        applyCompletedRunArtifacts(runDetail);
+        artifactsApplied = true;
+
+        const completedText = "Training completed";
+        if (statusEl) statusEl.textContent = completedText;
+        pushUpdate({ statusText: completedText, completed: true });
+
+        refreshCoreData().catch(() => {});
+
+        if (timerId) {
+          clearInterval(timerId);
+          timerId = null;
+        }
+
+        return;
+      }
+
+      if (isErrorStatus) {
+        const failureMessage = runDetail?.errorMessage || "Training finished with an error";
+        const failedText = `Error: ${failureMessage}`;
+        if (statusEl) statusEl.textContent = failedText;
+        pushUpdate({ statusText: failedText, error: true });
+        showNotice(failureMessage, "error");
+
+        if (timerId) {
+          clearInterval(timerId);
+          timerId = null;
+        }
+
+        return;
+      }
+
+      const updatedText = `Updated: ${formatStatusUpdateTime()}`;
+      if (statusEl) statusEl.textContent = updatedText;
+      pushUpdate({ statusText: updatedText });
+
+      if (artifactsApplied) {
+        const block = qs("#runArtifactsBlock");
+        if (block) {
+          block.hidden = true;
+        }
+        artifactsApplied = false;
+      }
+    } catch (error) {
+      const errorText = `Error: ${error.message}`;
+      if (statusEl) statusEl.textContent = errorText;
+      pushUpdate({ statusText: errorText });
+    }
+  };
+
+  load();
+
+  if (live) {
+    timerId = setInterval(load, LOGS_POLL_INTERVAL_MS);
+  }
+
+  return () => {
+    if (timerId) clearInterval(timerId);
+  };
+}
+
+function renderRunLogs() {
+  return `
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title" style="font-size:20px;">Run Logs</h3>
+          <p class="card-subtitle">Live log stream for the selected run</p>
+        </div>
+      </div>
+
+      <textarea id="runLogsTextarea" class="logs-box" readonly spellcheck="false"></textarea>
+      <div id="runLogsStatus" class="logs-status"></div>
+
+      <div id="runArtifactsBlock" hidden style="margin-top:16px;">
+        <div class="chart-grid">
+          <article class="chart-card">
+            <div class="chart-title">Training Chart</div>
+            <img
+              id="resultChart"
+              src=""
+              alt="Training chart"
+              style="display:block; width:100%; max-width:100%; border-radius:16px; border:1px solid var(--line); background:#fff;"
+            />
+          </article>
+
+          <article class="chart-card">
+            <div class="chart-title">Model Weights</div>
+            <a
+              id="downloadModel"
+              href="#"
+              download="best.pt"
+              class="btn btn-primary artifact-download-btn"
+            >
+              Download best.pt
+            </a>
+          </article>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 async function bootstrap() {
   try {
     setLoading("Загрузка данных...");
@@ -2702,29 +2809,43 @@ async function bootstrap() {
   }
 }
 
-if (typeof window !== "undefined" && !window.__AUTOML_APP_BOOTSTRAP_BOUND__) {
+let appBootstrapStarted = false;
+
+function startAppOnce() {
+  if (appBootstrapStarted) return;
+  appBootstrapStarted = true;
+  bootstrap();
+}
+
+if (typeof window !== "undefined" && typeof document !== "undefined" && !window.__AUTOML_APP_BOOTSTRAP_BOUND__) {
   window.__AUTOML_APP_BOOTSTRAP_BOUND__ = true;
-  window.addEventListener("DOMContentLoaded", bootstrap);
 
   window.formToJSON = formToJSON;
-  window.mockStartTraining = mockStartTraining;
   window.fetchLogs = fetchLogs;
   window.renderLogsWithAutoscroll = renderLogsWithAutoscroll;
   window.startLogsPolling = startLogsPolling;
+  window.addHyperparamRow = addHyperparamRow;
+  window.removeHyperparamRow = removeHyperparamRow;
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", startAppOnce);
+  } else {
+    startAppOnce();
+  }
 }
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
     bootstrap,
     formToJSON,
-    mockStartTraining,
     fetchLogs,
     renderLogsWithAutoscroll,
     startLogsPolling,
     serializeForm,
-    fetchDummyStatus,
-    startDummyStatusPolling,
-    normalizeDummyStatus,
-    applyDummyStatus,
+    fetchAutomlStatus,
+    startAutomlStatusPolling,
+    normalizeAutomlStatus,
+    applyAutomlStatus,
+    fileNameFromUrl,
     };
 }

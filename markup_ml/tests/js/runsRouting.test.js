@@ -50,4 +50,20 @@ describe("runs routing", () => {
     expect(visibleRows).toHaveLength(1);
     expect(visibleRows[0].dataset.runId).toBe("run-3");
   });
+
+  test("logs tab shows artifact links from /runs instead of deleted static assets", async () => {
+    await bootstrapApp({ hash: "#runs/run-1" });
+    await flushMicrotasks(12);
+
+    const logsTab = document.querySelector('.tab-btn[data-tab="logs"]');
+    expect(logsTab).not.toBeNull();
+
+    logsTab.click();
+    await flushMicrotasks(20);
+
+    const downloadLink = document.getElementById("downloadModel");
+    expect(downloadLink).not.toBeNull();
+    expect(downloadLink.getAttribute("href")).toContain("/runs/detect/run-1/trial_000/weights/best.pt");
+    expect(downloadLink.getAttribute("download")).toBe("best.pt");
+  });
 });

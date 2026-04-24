@@ -22,7 +22,7 @@ function errorResponse(status) {
   });
 }
 
-function createDashboardFetchMock(dummyStatusFactory) {
+function createDashboardFetchMock(statusFactory) {
   return jest.fn((request) => {
     const key = String(request);
 
@@ -77,15 +77,15 @@ function createDashboardFetchMock(dummyStatusFactory) {
       ]);
     }
 
-    if (key.includes("dummy_status.json")) {
-      return dummyStatusFactory(key);
+    if (key.includes("/api/status")) {
+      return statusFactory(key);
     }
 
     return Promise.reject(new Error(`Unexpected fetch: ${key}`));
   });
 }
 
-describe("dummy status polling", () => {
+describe("automl status polling", () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
@@ -93,45 +93,48 @@ describe("dummy status polling", () => {
     window.location.hash = "";
   });
 
-  test("dashboard отображает данные из dummy_status.json", async () => {
+  test("dashboard renders data from /api/status", async () => {
     const fetchMock = createDashboardFetchMock(() =>
       jsonResponse({
-        modelNumber: "YOLOv8n",
-        totalCount: 128,
+        current_model: "YOLOv8n",
+        total_models: 128,
         status: "running",
+        runId: "run-1",
+        error: null,
       })
     );
 
     await bootstrapApp({ hash: "#dashboard", fetchMock });
     await flushMicrotasks(20);
 
-    await waitFor(() => document.getElementById("dummyStatusModel") !== null);
+    await waitFor(() => document.getElementById("automlStatusModel") !== null);
 
-    expect(document.getElementById("dummyStatusModel").textContent).toBe("YOLOv8n");
-    expect(document.getElementById("dummyStatusTotal").textContent).toBe("128");
-    expect(document.getElementById("dummyStatusValue").textContent.toLowerCase()).toContain("running");
-    expect(document.getElementById("dummyStatusUpdated").textContent).toContain("Обновлено:");
+    expect(document.getElementById("automlStatusModel").textContent).toBe("YOLOv8n");
+    expect(document.getElementById("automlStatusTotal").textContent).toBe("128");
+    expect(document.getElementById("automlStatusValue").textContent.toLowerCase()).toContain("running");
+    expect(document.getElementById("automlStatusRunId").textContent).toBe("run-1");
+    expect(document.getElementById("automlStatusUpdated").textContent).toContain("Updated:");
   });
 
-  test("dashboard обновляет статус по таймеру каждые 3 секунды", async () => {
+  test("dashboard updates status every 3 seconds", async () => {
     jest.useFakeTimers();
 
-    let dummyRequestCount = 0;
+    let statusRequestCount = 0;
 
     const fetchMock = createDashboardFetchMock(() => {
-      dummyRequestCount += 1;
+      statusRequestCount += 1;
 
-      if (dummyRequestCount === 1) {
+      if (statusRequestCount === 1) {
         return jsonResponse({
-          modelNumber: "YOLOv8n",
-          totalCount: 128,
+          current_model: "YOLOv8n",
+          total_models: 128,
           status: "running",
         });
       }
 
       return jsonResponse({
-        modelNumber: "YOLOv11m",
-        totalCount: 256,
+        current_model: "YOLOv11m",
+        total_models: 256,
         status: "finished",
       });
     });
@@ -139,31 +142,31 @@ describe("dummy status polling", () => {
     await bootstrapApp({ hash: "#dashboard", fetchMock });
     await flushMicrotasks(20);
 
-    await waitFor(() => document.getElementById("dummyStatusModel") !== null);
+    await waitFor(() => document.getElementById("automlStatusModel") !== null);
 
-    expect(document.getElementById("dummyStatusModel").textContent).toBe("YOLOv8n");
-    expect(document.getElementById("dummyStatusTotal").textContent).toBe("128");
-    expect(document.getElementById("dummyStatusValue").textContent.toLowerCase()).toContain("running");
+    expect(document.getElementById("automlStatusModel").textContent).toBe("YOLOv8n");
+    expect(document.getElementById("automlStatusTotal").textContent).toBe("128");
+    expect(document.getElementById("automlStatusValue").textContent.toLowerCase()).toContain("running");
 
     jest.advanceTimersByTime(3000);
     await flushMicrotasks(20);
 
     await waitFor(() =>
-      document.getElementById("dummyStatusModel")?.textContent === "YOLOv11m"
+      document.getElementById("automlStatusModel")?.textContent === "YOLOv11m"
     );
 
-    expect(document.getElementById("dummyStatusTotal").textContent).toBe("256");
-    expect(document.getElementById("dummyStatusValue").textContent.toLowerCase()).toContain("finished");
+    expect(document.getElementById("automlStatusTotal").textContent).toBe("256");
+    expect(document.getElementById("automlStatusValue").textContent.toLowerCase()).toContain("finished");
   });
 
-  test("dashboard показывает ошибку, если dummy_status.json недоступен", async () => {
+  test("dashboard shows error when /api/status is unavailable", async () => {
     const fetchMock = createDashboardFetchMock(() => errorResponse(500));
 
     await bootstrapApp({ hash: "#dashboard", fetchMock });
     await flushMicrotasks(20);
 
-    await waitFor(() => document.getElementById("dummyStatusUpdated") !== null);
+    await waitFor(() => document.getElementById("automlStatusUpdated") !== null);
 
-    expect(document.getElementById("dummyStatusUpdated").textContent).toContain("HTTP 500");
+    expect(document.getElementById("automlStatusUpdated").textContent).toContain("HTTP 500");
   });
 });
