@@ -97,13 +97,21 @@ def repoint_static_mounts(runs_dir: Path) -> None:
         route.app.config_checked = False
 
 
-class FakeOrchestrator:
-    def __init__(self, base_model="yolov8n.pt", run_id=None, output_root="runs/detect/automl", log_callback=None):
+def resolve_search_value(value):
+    if isinstance(value, list):
+        return value[0]
+    if isinstance(value, tuple):
+        return value[0]
+    return value
+
+
+class FakeTPEOptimizer:
+    def __init__(self, base_model="yolov8n.pt", run_id=None, output_root="runs/detect/automl", log_callback=None, seed=42):
         self.run_id = run_id
         self.output_root = Path(output_root)
         self.log_callback = log_callback
 
-    def run(self, config_list):
+    def optimize(self, search_space=None, n_trials=10, fixed_params=None):
         trial_dir = self.output_root / "trial_000"
         weights_dir = trial_dir / "weights"
         weights_dir.mkdir(parents=True, exist_ok=True)
@@ -120,32 +128,42 @@ class FakeOrchestrator:
         if callable(self.log_callback):
             self.log_callback("Fake orchestrator finished trial_000")
 
+        resolved_config = {
+            key: resolve_search_value(value)
+            for key, value in (search_space or {}).items()
+        }
+        resolved_config.update(fixed_params or {})
+
         main_module.safe_update_global_status(
             runId=self.run_id,
             current_model=1,
-            total_models=1,
+            total_models=n_trials,
             status="completed",
-            current_config=config_list[0] if config_list else None,
-            best_result={"trial": 0, "score": 0.67},
+            current_config=resolved_config,
+            best_result={"trial": 0, "score": 0.67, "config": resolved_config},
             error=None,
         )
 
-        return [
-            {
-                "trial": 0,
-                "config": config_list[0] if config_list else {},
-                "status": "completed",
-                "metrics": {
-                    "train/box_loss": 0.82,
-                    "metrics/precision(B)": 0.74,
-                    "metrics/recall(B)": 0.69,
-                    "metrics/mAP50(B)": 0.81,
-                    "metrics/mAP50-95(B)": 0.67,
-                },
-                "train_dir": str(trial_dir),
-                "model_path": str(weights_dir / "best.pt"),
-            }
-        ]
+        return {
+            "results": [
+                {
+                    "trial": 0,
+                    "config": resolved_config,
+                    "status": "completed",
+                    "metrics": {
+                        "train/box_loss": 0.82,
+                        "metrics/precision(B)": 0.74,
+                        "metrics/recall(B)": 0.69,
+                        "metrics/mAP50(B)": 0.81,
+                        "metrics/mAP50-95(B)": 0.67,
+                    },
+                    "train_dir": str(trial_dir),
+                    "model_path": str(weights_dir / "best.pt"),
+                }
+            ],
+            "best_params": resolved_config,
+            "best_value": 0.67,
+        }
 
 
 def test_e2e_dataset_path_to_artifact_download(monkeypatch, tmp_path: Path) -> None:
@@ -164,7 +182,7 @@ def test_e2e_dataset_path_to_artifact_download(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setattr(main_module, "DATASETS_DIR", datasets_dir)
     monkeypatch.setattr(main_module, "STATUS_MANAGER", StatusManager(str(status_file)))
     monkeypatch.setattr(main_module, "allowed_dataset_roots", lambda: [datasets_dir.resolve(), uploads_dir.resolve()])
-    monkeypatch.setattr(main_module, "AutoMLOrchestrator", FakeOrchestrator)
+    monkeypatch.setattr(main_module, "TPEOptimizer", FakeTPEOptimizer)
     monkeypatch.setattr(main_module, "DATASET_ID_COUNTER", make_counter(1))
     monkeypatch.setattr(main_module, "RUN_ID_COUNTER", make_counter(1))
 
@@ -197,7 +215,8 @@ def test_e2e_dataset_path_to_artifact_download(monkeypatch, tmp_path: Path) -> N
         json={
             "targetMetric": "mAP@50-95",
             "device": "cpu",
-            "searchAlg": "GridSearch",
+            "searchAlg": "OptunaTPE",
+            "optunaTrials": 1,
             "hyperparams": {
                 "epochs": {"type": "list", "values": [1]},
                 "batchSize": {"type": "list", "values": [2]},
@@ -222,6 +241,7 @@ def test_e2e_dataset_path_to_artifact_download(monkeypatch, tmp_path: Path) -> N
     run_detail = run_detail_response.json()
 
     assert run_detail["status"] == "finished"
+    assert run_detail["searchAlgorithm"] == "OptunaTPE"
     assert run_detail["summary"]["bestModel"] == "trial_000"
     assert run_detail["summary"]["bestMap"] == 0.67
     assert run_detail["artifacts"]["bestModelUrl"].endswith("/runs/detect/run-1/trial_000/weights/best.pt")
