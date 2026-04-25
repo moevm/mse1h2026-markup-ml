@@ -182,6 +182,8 @@ function ensureArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+
+
 async function refreshCoreData() {
   const [dashboard, datasets, runs] = await Promise.all([
     api("/dashboard"),
@@ -1042,14 +1044,27 @@ async function renderDatasetsPage() {
                 <label for="displayName">Название</label>
                 <input id="displayName" name="displayName" type="text" required />
               </div>
-            </div>
 
+            <div class="form-group">
+              <label>Генерация Yaml</label>
+              <label class="toggle">
+                <input type="checkbox" id="toggleInput">
+                <span class="slider"></span>
+              </label>
+            </div>
+            
+            
             <div class="form-group">
               <label for="description">Описание</label>
               <textarea id="description" name="description"></textarea>
             </div>
+            
+            <div class="form-group" id="yamlUploader">
+              <label for="datasetFile">Файл Yaml</label>
+              <input id="yamlFile" name="yamlFile" type="file" accept=".yaml"  />
+            </div>
 
-            <div class="form-grid">
+            <div class="form-grid", id="yamlConfiguration">
               <div class="form-group">
                 <label for="numClasses">Classes Count</label>
                 <input id="numClasses" name="numClasses" type="number" min="1" placeholder="3" />
@@ -1059,11 +1074,6 @@ async function renderDatasetsPage() {
                 <label for="classNames">Class Names</label>
                 <input id="classNames" name="classNames" type="text" placeholder="person, car, ball" />
               </div>
-            </div>
-
-            <div class="helper-text">
-              For archives these values are used to create <code>data.yaml</code>. If you upload an existing
-              YAML file, the values will be read automatically.
             </div>
 
             <div class="form-group">
@@ -1373,6 +1383,35 @@ async function renderDatasetsPage() {
 
     try {
       const formData = new FormData(form);
+      const toggleInput = qs("#toggleInput");
+      const isGenerateMode = toggleInput?.checked || false;
+
+      if (isGenerateMode) {
+
+        const numClasses = qs("#numClasses")?.value;
+        const classNamesInput = qs("#classNames")?.value;
+        
+        if (!numClasses || numClasses < 1) {
+          throw new Error("Укажите количество классов");
+        }
+        
+        const classNames = classNamesInput 
+          ? classNamesInput.split(',').map(name => name.trim()).filter(name => name)
+          : [];
+        
+        if (classNames.length !== parseInt(numClasses)) {
+          throw new Error(`Количество имен классов (${classNames.length}) не соответствует указанному количеству (${numClasses})`);
+        }
+        
+      } else {
+        const yamlFile = qs("#yamlFile")?.files[0];
+        if (!yamlFile) {
+          throw new Error("Выберите YAML файл");
+        }
+      }
+      
+      showNotice("Создание датасета...", "info");
+      
       const created = await api("/datasets", {
         method: "POST",
         body: formData,
@@ -1381,15 +1420,16 @@ async function renderDatasetsPage() {
       state.datasetDetails = {};
       await refreshCoreData();
       state.activeDatasetId = created?.id || state.datasets[0]?.id || null;
+      
       showNotice(
-        created?.yamlReady
-          ? "Датасет загружен, data.yaml настроен."
-          : "Датасет загружен. data.yaml пока не настроен.",
-        created?.yamlReady ? "success" : "warning"
+        isGenerateMode 
+          ? "Датасет создан и YAML сгенерирован!" 
+          : "Датасет загружен с YAML файлом!",
+        "success"
       );
       await renderDatasetsPage();
     } catch (error) {
-      showNotice(error.message || "Не удалось загрузить датасет.", "error");
+      showNotice(error.message || "Не удалось создать датасет.", "error");
     } finally {
       if (submitButton) submitButton.disabled = false;
     }
@@ -1474,6 +1514,38 @@ async function renderDatasetsPage() {
     if (button) button.disabled = false;
   }
   });
+  const toggleInput = qs("#toggleInput");
+  const toggleStatus = qs("#status");
+
+  if (toggleInput && toggleStatus) {
+      toggleInput.addEventListener('change', function() {
+          if (this.checked) {
+              toggleStatus.textContent = 'Включен';
+              toggleStatus.style.color = '#4CAF50';
+          } else {
+              toggleStatus.textContent = 'Выключен';
+              toggleStatus.style.color = '#999';
+          }
+      });
+  }
+  const genearateBlock = qs("#yamlConfiguration");
+  const uploadBlock = qs("#yamlUploader");
+  function updateBlocksVisibility() {
+    const isGenerate = toggleInput?.checked || false;
+    
+    if (genearateBlock) {
+      genearateBlock.style.display = isGenerate ? 'block' : 'none';
+    }
+    
+    if (uploadBlock){
+      uploadBlock.style.display = isGenerate ? 'none' : 'block'
+    }
+  }
+
+  if (toggleInput) {
+    updateBlocksVisibility();
+    toggleInput.addEventListener('change', updateBlocksVisibility);
+  }
 
   qs("#datasetRunsTable")?.addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-run-id]");
@@ -2068,6 +2140,8 @@ async function renderRunDetailPage(runId) {
     );
   }
 }
+
+
 
 async function renderComparePage() {
   setPageMeta("Compare", "Сравнение запусков по одному датасету");
