@@ -54,16 +54,23 @@ class FakeTrial:
 
 
 class FakeStudy:
-    def __init__(self, module):
+    def __init__(self, module, study_name):
         self.module = module
+        self.study_name = study_name
+        self.optimized_trial_numbers = []
 
     def optimize(self, objective, n_trials, catch=()):
-        for trial in self.module.pending_trials[:n_trials]:
+        start_index = len(self.optimized_trial_numbers)
+        stop_index = start_index + n_trials
+        for trial in self.module.pending_trials[start_index:stop_index]:
             try:
                 objective(trial)
+                self.optimized_trial_numbers.append(trial.number)
             except self.module.exceptions.TrialPruned:
+                self.optimized_trial_numbers.append(trial.number)
                 continue
             except catch:
+                self.optimized_trial_numbers.append(trial.number)
                 continue
 
 
@@ -76,9 +83,26 @@ class FakeOptunaModule(types.ModuleType):
         self.pruners = types.SimpleNamespace(
             SuccessiveHalvingPruner=lambda **kwargs: {"kind": "asha", **kwargs}
         )
+        self.create_study_calls = []
+        self.studies = {}
 
     def create_study(self, **kwargs):
-        return FakeStudy(self)
+        self.create_study_calls.append(dict(kwargs))
+
+        storage = kwargs.get("storage")
+        if isinstance(storage, str) and storage.startswith("sqlite:///"):
+            db_path = Path(storage.removeprefix("sqlite:///"))
+            if not db_path.is_absolute():
+                db_path = Path.cwd() / db_path
+            db_path.touch()
+
+        study_name = kwargs.get("study_name")
+        if kwargs.get("load_if_exists") and study_name in self.studies:
+            return self.studies[study_name]
+
+        study = FakeStudy(self, study_name)
+        self.studies[study_name] = study
+        return study
 
 
 class FakeTrainer:
@@ -184,6 +208,8 @@ def test_objective_reports_map_and_prunes(monkeypatch, tmp_path: Path):
 
 
 def test_optimize_returns_best_params(monkeypatch, tmp_path: Path):
+    monkeypatch.chdir(tmp_path)
+
     pending_trials = [
         FakeTrial(
             0,
@@ -239,3 +265,104 @@ def test_optimize_returns_best_params(monkeypatch, tmp_path: Path):
     assert result["best_params"]["batch"] == 16
     assert result["best_params"]["device"] == "cpu"
     assert FakeYOLO.train_calls[1]["optimizer"] == "AdamW"
+    assert result["study_name"] == "run-2"
+    assert result["storage"] == "sqlite:///automl_study.db"
+    assert (tmp_path / "automl_study.db").exists()
+
+    create_study_call = optimizer_module.optuna.create_study_calls[-1]
+    assert create_study_call["study_name"] == "run-2"
+    assert create_study_call["storage"] == "sqlite:///automl_study.db"
+    assert create_study_call["load_if_exists"] is True
+
+
+def test_optimize_resets_existing_storage_before_new_cycle(monkeypatch, tmp_path: Path):
+    monkeypatch.chdir(tmp_path)
+
+    optimizer_module = load_tpe_optimizer_module(
+        monkeypatch,
+        pending_trials=[
+            FakeTrial(
+                0,
+                {
+                    "epochs": 2,
+                    "batch": 8,
+                    "imgsz": 640,
+                    "lr0": 0.001,
+                    "patience": 3,
+                },
+            )
+        ],
+    )
+    optimizer = optimizer_module.TPEOptimizer(run_id="new-run", output_root=tmp_path / "runs")
+    optimizer.status_manager = DummyStatusManager()
+
+    study_db = tmp_path / "automl_study.db"
+    study_db.write_text("old-study", encoding="utf-8")
+    (tmp_path / "automl_study.db-wal").write_text("wal", encoding="utf-8")
+    (tmp_path / "automl_study.db-shm").write_text("shm", encoding="utf-8")
+
+    FakeYOLO.scenarios = {"trial_000": [0.33]}
+    FakeYOLO.train_calls = []
+
+    optimizer.optimize(
+        search_space={
+            "epochs": [2],
+            "batch": [8],
+            "imgsz": [640],
+            "lr0": [0.001],
+            "patience": [3],
+        },
+        n_trials=1,
+        fixed_params={"data": "dataset.yaml"},
+        reset_storage=True,
+    )
+
+    assert study_db.exists()
+    assert study_db.read_text(encoding="utf-8") == ""
+    assert not (tmp_path / "automl_study.db-wal").exists()
+    assert not (tmp_path / "automl_study.db-shm").exists()
+
+
+def test_parallel_workers_reuse_same_optuna_study(monkeypatch, tmp_path: Path):
+    monkeypatch.chdir(tmp_path)
+
+    optimizer_module = load_tpe_optimizer_module(
+        monkeypatch,
+        pending_trials=[
+            FakeTrial(0, {"epochs": 2, "batch": 8, "imgsz": 640, "lr0": 0.001, "patience": 3}),
+            FakeTrial(1, {"epochs": 2, "batch": 16, "imgsz": 640, "lr0": 0.002, "patience": 3}),
+        ],
+    )
+    FakeYOLO.scenarios = {
+        "trial_000": [0.21],
+        "trial_001": [0.44],
+    }
+    FakeYOLO.train_calls = []
+
+    first_worker = optimizer_module.TPEOptimizer(run_id="shared-run", output_root=tmp_path / "worker1")
+    second_worker = optimizer_module.TPEOptimizer(run_id="shared-run", output_root=tmp_path / "worker2")
+    first_worker.status_manager = DummyStatusManager()
+    second_worker.status_manager = DummyStatusManager()
+
+    first_worker.optimize(
+        search_space={"epochs": [2], "batch": [8, 16], "imgsz": [640], "lr0": (0.001, 0.01), "patience": [3]},
+        n_trials=1,
+        fixed_params={"data": "dataset.yaml"},
+        study_name="shared-run",
+        reset_storage=True,
+    )
+    second_worker.optimize(
+        search_space={"epochs": [2], "batch": [8, 16], "imgsz": [640], "lr0": (0.001, 0.01), "patience": [3]},
+        n_trials=1,
+        fixed_params={"data": "dataset.yaml"},
+        study_name="shared-run",
+        reset_storage=False,
+    )
+
+    shared_study = optimizer_module.optuna.studies["shared-run"]
+    assert shared_study.optimized_trial_numbers == [0, 1]
+    assert len(optimizer_module.optuna.create_study_calls) == 2
+    assert optimizer_module.optuna.create_study_calls[0]["study_name"] == "shared-run"
+    assert optimizer_module.optuna.create_study_calls[1]["study_name"] == "shared-run"
+    assert optimizer_module.optuna.create_study_calls[0]["load_if_exists"] is True
+    assert optimizer_module.optuna.create_study_calls[1]["load_if_exists"] is True

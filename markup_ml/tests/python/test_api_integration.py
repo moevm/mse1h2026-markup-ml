@@ -111,7 +111,7 @@ class FakeTPEOptimizer:
         self.output_root = Path(output_root)
         self.log_callback = log_callback
 
-    def optimize(self, search_space=None, n_trials=10, fixed_params=None):
+    def optimize(self, search_space=None, n_trials=10, fixed_params=None, study_name=None, reset_storage=False):
         trial_dir = self.output_root / "trial_000"
         weights_dir = trial_dir / "weights"
         weights_dir.mkdir(parents=True, exist_ok=True)
@@ -163,6 +163,8 @@ class FakeTPEOptimizer:
             ],
             "best_params": resolved_config,
             "best_value": 0.67,
+            "study_name": study_name or self.run_id,
+            "storage": "sqlite:///automl_study.db",
         }
 
 

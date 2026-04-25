@@ -1437,6 +1437,8 @@ def run_training_task(
             search_space=normalized_params,
             n_trials=trial_count,
             fixed_params=fixed_params,
+            study_name=run_id,
+            reset_storage=True,
         )
         result = optimization_result["results"]
         print("Training finished")
