@@ -155,7 +155,7 @@ function createBaseState() {
       targetMetric: "mAP@50",
       budget: 20,
       device: "gpu0",
-      searchAlgorithm: "GridSearch",
+      searchAlgorithm: "OptunaTPE",
       errorMessage: null,
       artifacts: {
         bestModelUrl: "/runs/detect/run-1/trial_000/weights/best.pt",
@@ -222,7 +222,7 @@ function createBaseState() {
       targetMetric: "mAP@50",
       budget: 16,
       device: "gpu1",
-      searchAlgorithm: "GridSearch",
+      searchAlgorithm: "OptunaTPE",
       errorMessage: null,
       artifacts: {
         bestModelUrl: "/runs/detect/run-2/trial_000/weights/best.pt",
@@ -264,7 +264,7 @@ function createBaseState() {
       targetMetric: "mAP@50-95",
       budget: 24,
       device: "gpu0",
-      searchAlgorithm: "RandomSearch",
+      searchAlgorithm: "OptunaTPE",
       errorMessage: null,
       artifacts: {
         bestModelUrl: null,
