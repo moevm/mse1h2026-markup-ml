@@ -591,7 +591,13 @@ async def create_dataset(
     numClasses: Optional[int] = Form(None),
     classNames: str = Form(""),
     datasetFile: UploadFile = File(...),
+    yamlFile: Optional[UploadFile] = File(None),
+    generateYaml: str = Form("false"),
 ):
+    if generateYaml == "true":
+        print("Generate Yaml!")
+    else:
+        print("Uploading Yaml")
     dataset_id = next_dataset_id()
     upload_dir = Path("uploads/datasets")
     upload_dir.mkdir(parents=True, exist_ok=True)

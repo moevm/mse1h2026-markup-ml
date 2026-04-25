@@ -1385,9 +1385,18 @@ async function renderDatasetsPage() {
       const formData = new FormData(form);
       const toggleInput = qs("#toggleInput");
       const isGenerateMode = toggleInput?.checked || false;
+      formData.append("generateYaml", isGenerateMode ? "true" : "false");
+
+      const zipFile = qs("#datasetFile")?.files[0];
+      if (!zipFile) {
+        throw new Error("Выберите ZIP архив с датасетом");
+      }
+
+      if (!formData.has("datasetFile")) {
+        formData.append("datasetFile", zipFile);
+      }
 
       if (isGenerateMode) {
-
         const numClasses = qs("#numClasses")?.value;
         const classNamesInput = qs("#classNames")?.value;
         
@@ -1403,11 +1412,20 @@ async function renderDatasetsPage() {
           throw new Error(`Количество имен классов (${classNames.length}) не соответствует указанному количеству (${numClasses})`);
         }
         
+        formData.append("numClasses", numClasses);
+        formData.append("classNames", classNamesInput);
+
+        formData.delete("yamlFile");
+
       } else {
         const yamlFile = qs("#yamlFile")?.files[0];
         if (!yamlFile) {
           throw new Error("Выберите YAML файл");
         }
+        
+        formData.append("yamlFile", yamlFile);
+        formData.delete("numClasses");
+        formData.delete("classNames");
       }
       
       showNotice("Создание датасета...", "info");
@@ -1429,19 +1447,13 @@ async function renderDatasetsPage() {
       );
       await renderDatasetsPage();
     } catch (error) {
+      console.error("Error:", error);
       showNotice(error.message || "Не удалось создать датасет.", "error");
     } finally {
       if (submitButton) submitButton.disabled = false;
     }
   });
-
-  qsa(".dataset-switch-btn").forEach((button) => {
-    button.addEventListener("click", async () => {
-      state.activeDatasetId = button.dataset.datasetId;
-      await renderDatasetsPage();
-    });
-  });
-
+  
   qs("#launchRunForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   clearNotice();
