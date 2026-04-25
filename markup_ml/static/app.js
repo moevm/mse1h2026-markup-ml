@@ -1,4 +1,4 @@
-const BASE_URL = "";
+﻿const BASE_URL = "";
 const LOGS_POLL_INTERVAL_MS = 2000;
 const STATUS_POLL_INTERVAL_MS = 3000;
 
@@ -23,15 +23,15 @@ const state = {
   compareRunIds: [],
   runTab: "overview",
   automlStatus: {
-    modelNumber: "—",
-    totalCount: "—",
+    modelNumber: "вЂ”",
+    totalCount: "вЂ”",
     status: "unknown",
     error: null,
   },
   trainingMonitor: {
     visible: false,
     runId: null,
-    statusText: "Ожидание запуска...",
+    statusText: "РћР¶РёРґР°РЅРёРµ Р·Р°РїСѓСЃРєР°...",
     logs: "",
     pollingInterval: null,
   }
@@ -58,9 +58,9 @@ function escapeHtml(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return "—";
+  if (!value) return "вЂ”";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "вЂ”";
   return date.toLocaleString("ru-RU", {
     day: "2-digit",
     month: "2-digit",
@@ -72,7 +72,7 @@ function formatDateTime(value) {
 
 function formatNumber(value, digits = 2) {
   const num = Number(value);
-  if (Number.isNaN(num)) return "—";
+  if (Number.isNaN(num)) return "вЂ”";
   return num.toFixed(digits);
 }
 
@@ -107,7 +107,7 @@ function clearNotice() {
   if (el) el.innerHTML = "";
 }
 
-function setLoading(message = "Загрузка...") {
+function setLoading(message = "Р—Р°РіСЂСѓР·РєР°...") {
   const root = qs("#app-root");
   if (root) {
     root.innerHTML = `<div class="loader">${escapeHtml(message)}</div>`;
@@ -482,7 +482,7 @@ function startLogsPolling(opts) {
 
   const tick = async () => {
     try {
-      if (statusEl) statusEl.textContent = "Загрузка логов...";
+      if (statusEl) statusEl.textContent = "Р—Р°РіСЂСѓР·РєР° Р»РѕРіРѕРІ...";
       const text = await fetchLogs(url);
 
       if (text !== lastText) {
@@ -491,11 +491,11 @@ function startLogsPolling(opts) {
       }
 
       if (statusEl) {
-        statusEl.textContent = `Обновлено: ${new Date().toLocaleTimeString()}`;
+        statusEl.textContent = `РћР±РЅРѕРІР»РµРЅРѕ: ${new Date().toLocaleTimeString()}`;
       }
     } catch (error) {
       if (statusEl) {
-        statusEl.textContent = `Ошибка: ${error.message}`;
+        statusEl.textContent = `РћС€РёР±РєР°: ${error.message}`;
       }
     }
   };
@@ -515,13 +515,13 @@ function normalizeAutomlStatus(payload = {}) {
       payload.current_model ??
       payload.model_number ??
       payload.model ??
-      "—",
+      "вЂ”",
     totalCount:
       payload.totalCount ??
       payload.total_models ??
       payload.total_count ??
       payload.total ??
-      "—",
+      "вЂ”",
     status: payload.status ?? "unknown",
     error: payload.error ?? null,
     runId: payload.runId ?? payload.run_id ?? null,
@@ -542,13 +542,13 @@ function renderTrainingMonitorBlock() {
     <article class="run-summary-card" id="datasetTrainingMonitor" ${hiddenAttr} style="margin-top:16px;">
       <div class="card-header">
         <div>
-          <h3 class="card-title" style="font-size:20px;">Мониторинг обучения</h3>
-          <p class="card-subtitle">Статус запуска и вывод логов</p>
+          <h3 class="card-title" style="font-size:20px;">РњРѕРЅРёС‚РѕСЂРёРЅРі РѕР±СѓС‡РµРЅРёСЏ</h3>
+          <p class="card-subtitle">РЎС‚Р°С‚СѓСЃ Р·Р°РїСѓСЃРєР° Рё РІС‹РІРѕРґ Р»РѕРіРѕРІ</p>
         </div>
       </div>
 
       <div id="datasetTrainingLogsStatus" class="logs-status">${escapeHtml(
-        monitor.statusText || "Ожидание запуска..."
+        monitor.statusText || "РћР¶РёРґР°РЅРёРµ Р·Р°РїСѓСЃРєР°..."
       )}</div>
 
       <textarea
@@ -603,9 +603,9 @@ function startTrainingMonitorPolling(runId) {
 
       const lastLines = logs.split('\n').slice(-5).join('\n');
       
-      if (lastLines.includes('ОБУЧЕНИЕ УСПЕШНО ЗАВЕРШЕНО') || 
-          lastLines.includes(' ОБУЧЕНИЕ УСПЕШНО ЗАВЕРШЕНО!')) {
-        setTrainingMonitorStatus(' Обучение завершено');
+      if (lastLines.includes('РћР‘РЈР§Р•РќРР• РЈРЎРџР•РЁРќРћ Р—РђР’Р•Р РЁР•РќРћ') || 
+          lastLines.includes(' РћР‘РЈР§Р•РќРР• РЈРЎРџР•РЁРќРћ Р—РђР’Р•Р РЁР•РќРћ!')) {
+        setTrainingMonitorStatus(' РћР±СѓС‡РµРЅРёРµ Р·Р°РІРµСЂС€РµРЅРѕ');
 
         if (state.trainingMonitor.pollingInterval) {
           clearInterval(state.trainingMonitor.pollingInterval);
@@ -614,8 +614,8 @@ function startTrainingMonitorPolling(runId) {
 
         refreshCoreData();
         
-      } else if (lastLines.includes('Ошибка')) {
-        setTrainingMonitorStatus('Ошибка обучения');
+      } else if (lastLines.includes('РћС€РёР±РєР°')) {
+        setTrainingMonitorStatus('РћС€РёР±РєР° РѕР±СѓС‡РµРЅРёСЏ');
 
         if (state.trainingMonitor.pollingInterval) {
           clearInterval(state.trainingMonitor.pollingInterval);
@@ -627,13 +627,13 @@ function startTrainingMonitorPolling(runId) {
         if (lastLine && !lastLine.includes('[')) {
           setTrainingMonitorStatus(lastLine);
         } else {
-          setTrainingMonitorStatus('Обучение выполняется...');
+          setTrainingMonitorStatus('РћР±СѓС‡РµРЅРёРµ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ...');
         }
       }
       
     } catch (error) {
-      console.error('Ошибка загрузки логов:', error);
-      setTrainingMonitorStatus('Ошибка загрузки логов');
+      console.error('РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё Р»РѕРіРѕРІ:', error);
+      setTrainingMonitorStatus('РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё Р»РѕРіРѕРІ');
     }
   };
   
@@ -662,7 +662,7 @@ function getModelMetric(model, key) {
 }
 
 function renderDashboardPage() {
-  setPageMeta("Dashboard", "Обзор датасетов, запусков и результатов");
+  setPageMeta("Dashboard", "РћР±Р·РѕСЂ РґР°С‚Р°СЃРµС‚РѕРІ, Р·Р°РїСѓСЃРєРѕРІ Рё СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ");
 
   const summary = getDashboardSummary();
   const recentRuns = [...state.runs]
@@ -676,10 +676,10 @@ function renderDashboardPage() {
   renderRoot(`
     <div class="page-stack">
       <section class="grid-4">
-        ${renderKpi("Datasets", String(summary.datasetsCount), "Всего датасетов")}
-        ${renderKpi("Runs", String(summary.runsCount), "Всего запусков")}
-        ${renderKpi("Running", String(summary.runningCount), "Активные задачи")}
-        ${renderKpi("Queued", String(summary.queuedCount), "В очереди")}
+        ${renderKpi("Datasets", String(summary.datasetsCount), "Р’СЃРµРіРѕ РґР°С‚Р°СЃРµС‚РѕРІ")}
+        ${renderKpi("Runs", String(summary.runsCount), "Р’СЃРµРіРѕ Р·Р°РїСѓСЃРєРѕРІ")}
+        ${renderKpi("Running", String(summary.runningCount), "РђРєС‚РёРІРЅС‹Рµ Р·Р°РґР°С‡Рё")}
+        ${renderKpi("Queued", String(summary.queuedCount), "Р’ РѕС‡РµСЂРµРґРё")}
       </section>
 
       ${renderAutomlStatusCard()}
@@ -688,10 +688,10 @@ function renderDashboardPage() {
         <div class="card-header">
           <div>
             <h2 class="card-title">Datasets</h2>
-            <p class="card-subtitle">Выберите датасет для запуска и анализа результатов</p>
+            <p class="card-subtitle">Р’С‹Р±РµСЂРёС‚Рµ РґР°С‚Р°СЃРµС‚ РґР»СЏ Р·Р°РїСѓСЃРєР° Рё Р°РЅР°Р»РёР·Р° СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ</p>
           </div>
           <div class="inline-actions">
-            <button class="btn btn-primary" id="goDatasetsButton" type="button">Открыть Datasets</button>
+            <button class="btn btn-primary" id="goDatasetsButton" type="button">РћС‚РєСЂС‹С‚СЊ Datasets</button>
           </div>
         </div>
 
@@ -705,7 +705,7 @@ function renderDashboardPage() {
                       <article class="dataset-card">
                         <div class="dataset-card-header">
                           <div>
-                            <div class="dataset-name">${escapeHtml(dataset.name || "Без названия")}</div>
+                            <div class="dataset-name">${escapeHtml(dataset.name || "Р‘РµР· РЅР°Р·РІР°РЅРёСЏ")}</div>
                             <div class="dataset-meta">
 
                             </div>
@@ -714,14 +714,14 @@ function renderDashboardPage() {
                         </div>
 
                         <div class="meta-chips">
-                          <span class="chip">Best model: ${escapeHtml(dataset.bestModel || "—")}</span>
+                          <span class="chip">Best model: ${escapeHtml(dataset.bestModel || "вЂ”")}</span>
                           <span class="chip">Best mAP: ${metricValue(dataset.bestMap, 2)}</span>
                         </div>
 
                         <div class="form-actions" style="margin-top:14px;">
                           <button class="btn btn-secondary dashboard-dataset-open" data-dataset-id="${escapeHtml(
                             dataset.id
-                          )}" type="button">Открыть</button>
+                          )}" type="button">РћС‚РєСЂС‹С‚СЊ</button>
                         </div>
                       </article>
                     `
@@ -729,7 +729,7 @@ function renderDashboardPage() {
                   .join("")}
               </div>
             `
-            : `<div class="empty-state">Датасеты пока не добавлены</div>`
+            : `<div class="empty-state">Р”Р°С‚Р°СЃРµС‚С‹ РїРѕРєР° РЅРµ РґРѕР±Р°РІР»РµРЅС‹</div>`
         }
       </section>
 
@@ -737,10 +737,10 @@ function renderDashboardPage() {
         <div class="card-header">
           <div>
             <h2 class="card-title">Latest runs</h2>
-            <p class="card-subtitle">История последних запусков</p>
+            <p class="card-subtitle">РСЃС‚РѕСЂРёСЏ РїРѕСЃР»РµРґРЅРёС… Р·Р°РїСѓСЃРєРѕРІ</p>
           </div>
           <div class="inline-actions">
-            <button class="btn btn-secondary" id="goRunsButton" type="button">Открыть Runs</button>
+            <button class="btn btn-secondary" id="goRunsButton" type="button">РћС‚РєСЂС‹С‚СЊ Runs</button>
           </div>
         </div>
 
@@ -766,12 +766,12 @@ function renderDashboardPage() {
                         (run) => `
                           <tr data-run-id="${escapeHtml(run.id)}">
                             <td>${escapeHtml(run.id)}</td>
-                            <td>${escapeHtml(run.datasetName || "—")}</td>
+                            <td>${escapeHtml(run.datasetName || "вЂ”")}</td>
                             <td>${renderStatus(run.status)}</td>
                             <td>${escapeHtml(formatDateTime(run.startedAt))}</td>
-                            <td>${escapeHtml(run.bestModel || "—")}</td>
+                            <td>${escapeHtml(run.bestModel || "вЂ”")}</td>
                             <td>${metricValue(run.bestMap, 2)}</td>
-                            <td>${escapeHtml(run.device || run.gpu || "—")}</td>
+                            <td>${escapeHtml(run.device || run.gpu || "вЂ”")}</td>
                           </tr>
                         `
                       )
@@ -780,7 +780,7 @@ function renderDashboardPage() {
                 </table>
               </div>
             `
-            : `<div class="empty-state">Запусков пока нет</div>`
+            : `<div class="empty-state">Р—Р°РїСѓСЃРєРѕРІ РїРѕРєР° РЅРµС‚</div>`
         }
       </section>
     </div>
@@ -816,20 +816,16 @@ function renderDashboardPage() {
 function addHyperparamRow() {
   const container = document.getElementById('hyperparamsContainer');
   const newRow = document.createElement('div');
-  newRow.className = 'hyperparam-row';  
-  const searchAlgSelect = qs("#searchAlg");
-  const isRandomSearch = searchAlgSelect && searchAlgSelect.value === "RandomSearch";
+  newRow.className = 'hyperparam-row';
   
   newRow.innerHTML = `
-    <input type="text" name="hyperparam_name[]" placeholder="Название" class="hyperparam-name" />
-    ${isRandomSearch ? `
-      <select name="hyperparam_type[]" class="hyperparam-type">
-        <option value="list">Список значений</option>
-        <option value="range">Диапазон (мин макс)</option>
-      </select>
-    ` : '<input type="hidden" name="hyperparam_type[]" value="list" />'}
-    <input type="text" name="hyperparam_values[]" placeholder="Значения" class="hyperparam-values" />
-    <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">✖</button>
+    <input type="text" name="hyperparam_name[]" placeholder="РќР°Р·РІР°РЅРёРµ" class="hyperparam-name" />
+        <select name="hyperparam_type[]" class="hyperparam-type">
+      <option value="list">List</option>
+      <option value="range">Range (min max)</option>
+    </select>
+    <input type="text" name="hyperparam_values[]" placeholder="Р—РЅР°С‡РµРЅРёСЏ" class="hyperparam-values" />
+    <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">вњ–</button>
   `;
   container.appendChild(newRow);
 }
@@ -839,7 +835,7 @@ function removeHyperparamRow(button) {
   if (row && document.querySelectorAll('.hyperparam-row').length > 1) {
     row.remove();
   } else {
-    showNotice('Должна остаться хотя бы одна строка', 'warning');
+    showNotice('Р”РѕР»Р¶РЅР° РѕСЃС‚Р°С‚СЊСЃСЏ С…РѕС‚СЏ Р±С‹ РѕРґРЅР° СЃС‚СЂРѕРєР°', 'warning');
   }
 }
 
@@ -886,61 +882,27 @@ function collectHyperparams() {
 }
 
 function toggleHyperparamTypes() {
-  const searchAlgSelect = qs("#searchAlg");
-  const isRandomSearch = searchAlgSelect && searchAlgSelect.value === "RandomSearch";
-  
-  // Находим все строки гиперпараметров
   const hyperparamRows = document.querySelectorAll('.hyperparam-row');
-  
+
   hyperparamRows.forEach(row => {
-    const existingTypeSelect = row.querySelector('select[name="hyperparam_type[]"]');
-    const existingHiddenInput = row.querySelector('input[name="hyperparam_type[]"][type="hidden"]');
+    const typeSelect = row.querySelector('select[name="hyperparam_type[]"]');
     const valuesInput = row.querySelector('input[name="hyperparam_values[]"]');
-    
-    if (isRandomSearch) {
-      if (existingHiddenInput) {
-        const select = document.createElement('select');
-        select.name = 'hyperparam_type[]';
-        select.className = 'hyperparam-type';
-        select.innerHTML = `
-          <option value="list">Список значений</option>
-          <option value="range">Диапазон (мин макс)</option>
-        `;
-        existingHiddenInput.replaceWith(select);
-      } else if (existingTypeSelect) {
-        existingTypeSelect.style.display = 'block';
-      }
-      
-      if (valuesInput) {
-        const typeSelect = row.querySelector('select[name="hyperparam_type[]"]');
-        if (typeSelect) {
-          const currentType = typeSelect.value;
-          valuesInput.placeholder = currentType === 'list' ? 'Значения: 0.001 0.01 0.1' : 'Диапазон: 0.001 0.1';
-          
-          typeSelect.onchange = () => {
-            valuesInput.placeholder = typeSelect.value === 'list' 
-              ? 'Значения: 0.001 0.01 0.1' 
-              : 'Диапазон: 0.001 0.1';
-          };
-        }
-      }
-    } else {
-      if (existingTypeSelect) {
-        const hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'hyperparam_type[]';
-        hiddenInput.value = 'list';
-        existingTypeSelect.replaceWith(hiddenInput);
-      }
-      if (valuesInput) {
-        valuesInput.placeholder = 'Значения: 0.001 0.01 0.1';
-      }
+
+    if (valuesInput && typeSelect) {
+      const updatePlaceholder = () => {
+        valuesInput.placeholder = typeSelect.value === 'list'
+          ? 'Values: 0.001 0.01 0.1'
+          : 'Range: 0.001 0.1';
+      };
+
+      updatePlaceholder();
+      typeSelect.onchange = updatePlaceholder;
     }
   });
 }
 
 async function renderDatasetsPage() {
-  setPageMeta("Datasets", "Загрузка датасетов и запуск AutoML");
+  setPageMeta("Datasets", "Р—Р°РіСЂСѓР·РєР° РґР°С‚Р°СЃРµС‚РѕРІ Рё Р·Р°РїСѓСЃРє AutoML");
 
   const activeId = state.activeDatasetId || state.datasets[0]?.id || null;
   state.activeDatasetId = activeId;
@@ -954,8 +916,8 @@ async function renderDatasetsPage() {
     .map((source) => {
       const labelParts = [source.name || source.relativePath || source.id];
       if (source.sourceType) labelParts.push(source.sourceType);
-      if (source.trainFolder && source.valFolder) labelParts.push("train/val найден");
-      return `<option value="${escapeHtml(source.id)}">${escapeHtml(labelParts.filter(Boolean).join(" · "))}</option>`;
+      if (source.trainFolder && source.valFolder) labelParts.push("train/val РЅР°Р№РґРµРЅ");
+      return `<option value="${escapeHtml(source.id)}">${escapeHtml(labelParts.filter(Boolean).join(" В· "))}</option>`;
     })
     .join("");
 
@@ -965,21 +927,21 @@ async function renderDatasetsPage() {
         <article class="card">
           <div class="card-header">
             <div>
-              <h2 class="card-title">Новый датасет</h2>
-              <p class="card-subtitle">Загрузите архив или конфигурацию датасета</p>
+              <h2 class="card-title">РќРѕРІС‹Р№ РґР°С‚Р°СЃРµС‚</h2>
+              <p class="card-subtitle">Р—Р°РіСЂСѓР·РёС‚Рµ Р°СЂС…РёРІ РёР»Рё РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ РґР°С‚Р°СЃРµС‚Р°</p>
             </div>
           </div>
 
           <form id="datasetUploadForm">
             <div class="form-grid">
               <div class="form-group">
-                <label for="displayName">Название</label>
+                <label for="displayName">РќР°Р·РІР°РЅРёРµ</label>
                 <input id="displayName" name="displayName" type="text" required />
               </div>
             </div>
 
             <div class="form-group">
-              <label for="description">Описание</label>
+              <label for="description">РћРїРёСЃР°РЅРёРµ</label>
               <textarea id="description" name="description"></textarea>
             </div>
 
@@ -1001,27 +963,27 @@ async function renderDatasetsPage() {
             </div>
 
             <div class="form-group">
-              <label for="datasetSource">Датасет из папки <code>datasets/</code></label>
+              <label for="datasetSource">Р”Р°С‚Р°СЃРµС‚ РёР· РїР°РїРєРё <code>datasets/</code></label>
               <select id="datasetSource" name="datasetSource">
-                <option value="">Не выбирать — загружу файл</option>
+                <option value="">РќРµ РІС‹Р±РёСЂР°С‚СЊ вЂ” Р·Р°РіСЂСѓР¶Сѓ С„Р°Р№Р»</option>
                 ${datasetSourceOptions}
               </select>
               <div class="helper-text">
-                Не нужно вводить путь вручную. Положите датасет в папку <code>datasets/</code>
-                на хосте, и он появится в этом списке.
+                РќРµ РЅСѓР¶РЅРѕ РІРІРѕРґРёС‚СЊ РїСѓС‚СЊ РІСЂСѓС‡РЅСѓСЋ. РџРѕР»РѕР¶РёС‚Рµ РґР°С‚Р°СЃРµС‚ РІ РїР°РїРєСѓ <code>datasets/</code>
+                РЅР° С…РѕСЃС‚Рµ, Рё РѕРЅ РїРѕСЏРІРёС‚СЃСЏ РІ СЌС‚РѕРј СЃРїРёСЃРєРµ.
               </div>
             </div>
 
             <div class="form-group">
-              <label for="datasetFile">Файл датасета</label>
+              <label for="datasetFile">Р¤Р°Р№Р» РґР°С‚Р°СЃРµС‚Р°</label>
               <input id="datasetFile" name="datasetFile" type="file" accept=".zip,.yaml,.yml" />
               <div class="helper-text">
-                Используйте файл, если датасета ещё нет в списке выше.
+                РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„Р°Р№Р», РµСЃР»Рё РґР°С‚Р°СЃРµС‚Р° РµС‰С‘ РЅРµС‚ РІ СЃРїРёСЃРєРµ РІС‹С€Рµ.
               </div>
             </div>
 
             <div class="form-actions">
-              <button class="btn btn-primary" type="submit">Загрузить датасет</button>
+              <button class="btn btn-primary" type="submit">Р—Р°РіСЂСѓР·РёС‚СЊ РґР°С‚Р°СЃРµС‚</button>
             </div>
           </form>
         </article>
@@ -1029,8 +991,8 @@ async function renderDatasetsPage() {
         <article class="card">
           <div class="card-header">
             <div>
-              <h2 class="card-title">Список датасетов</h2>
-              <p class="card-subtitle">Выберите датасет для работы</p>
+              <h2 class="card-title">РЎРїРёСЃРѕРє РґР°С‚Р°СЃРµС‚РѕРІ</h2>
+              <p class="card-subtitle">Р’С‹Р±РµСЂРёС‚Рµ РґР°С‚Р°СЃРµС‚ РґР»СЏ СЂР°Р±РѕС‚С‹</p>
             </div>
           </div>
 
@@ -1044,7 +1006,7 @@ async function renderDatasetsPage() {
                         <article class="dataset-card">
                           <div class="dataset-card-header">
                             <div>
-                              <div class="dataset-name">${escapeHtml(dataset.name || "Без названия")}</div>
+                              <div class="dataset-name">${escapeHtml(dataset.name || "Р‘РµР· РЅР°Р·РІР°РЅРёСЏ")}</div>
                               <div class="dataset-meta">
 
                               </div>
@@ -1053,7 +1015,7 @@ async function renderDatasetsPage() {
                           </div>
 
                           <div class="meta-chips">
-                            <span class="chip">Best model: ${escapeHtml(dataset.bestModel || "—")}</span>
+                            <span class="chip">Best model: ${escapeHtml(dataset.bestModel || "вЂ”")}</span>
                             <span class="chip">Best mAP: ${metricValue(dataset.bestMap, 2)}</span>
                             <span class="chip">Last run: ${escapeHtml(formatDateTime(dataset.lastRunAt))}</span>
                           </div>
@@ -1061,7 +1023,7 @@ async function renderDatasetsPage() {
                           <div class="form-actions" style="margin-top:14px;">
                             <button class="btn btn-secondary dataset-switch-btn" type="button" data-dataset-id="${escapeHtml(
                               dataset.id
-                            )}">Выбрать</button>
+                            )}">Р’С‹Р±СЂР°С‚СЊ</button>
                           </div>
                         </article>
                       `
@@ -1069,7 +1031,7 @@ async function renderDatasetsPage() {
                     .join("")}
                 </div>
               `
-              : `<div class="empty-state">Датасеты ещё не добавлены</div>`
+              : `<div class="empty-state">Р”Р°С‚Р°СЃРµС‚С‹ РµС‰С‘ РЅРµ РґРѕР±Р°РІР»РµРЅС‹</div>`
           }
         </article>
       </section>
@@ -1081,24 +1043,24 @@ async function renderDatasetsPage() {
               <div class="card-header">
                 <div>
                   <h2 class="card-title">${escapeHtml(datasetDetail.name || "Dataset")}</h2>
-                  <p class="card-subtitle">${escapeHtml(datasetDetail.description || "Без описания")}</p>
+                  <p class="card-subtitle">${escapeHtml(datasetDetail.description || "Р‘РµР· РѕРїРёСЃР°РЅРёСЏ")}</p>
                 </div>
                 ${renderStatus(datasetDetail.status || "ready")}
               </div>
 
               <div class="grid-4" style="margin-bottom:16px;">
-                ${renderKpi("Samples", escapeHtml(String(datasetDetail.samples ?? "—")), "Размер датасета")}
-                ${renderKpi("Classes", escapeHtml(String(datasetDetail.classesCount ?? datasetDetail.classes?.length ?? "—")), "Количество классов")}
-                ${renderKpi("Best model", escapeHtml(datasetDetail.bestModel || "—"), "Лучшая модель")}
-                ${renderKpi("Best mAP", metricValue(datasetDetail.bestMap, 2), "Лучший результат")}
+                ${renderKpi("Samples", escapeHtml(String(datasetDetail.samples ?? "вЂ”")), "Р Р°Р·РјРµСЂ РґР°С‚Р°СЃРµС‚Р°")}
+                ${renderKpi("Classes", escapeHtml(String(datasetDetail.classesCount ?? datasetDetail.classes?.length ?? "вЂ”")), "РљРѕР»РёС‡РµСЃС‚РІРѕ РєР»Р°СЃСЃРѕРІ")}
+                ${renderKpi("Best model", escapeHtml(datasetDetail.bestModel || "вЂ”"), "Р›СѓС‡С€Р°СЏ РјРѕРґРµР»СЊ")}
+                ${renderKpi("Best mAP", metricValue(datasetDetail.bestMap, 2), "Р›СѓС‡С€РёР№ СЂРµР·СѓР»СЊС‚Р°С‚")}
               </div>
 
               <div class="grid-2">
                 <article class="run-summary-card">
                   <div class="card-header">
                     <div>
-                      <h3 class="card-title" style="font-size:20px;">Запуск AutoML</h3>
-                      <p class="card-subtitle">Настройка запуска для выбранного датасета</p>
+                      <h3 class="card-title" style="font-size:20px;">Р—Р°РїСѓСЃРє AutoML</h3>
+                      <p class="card-subtitle">РќР°СЃС‚СЂРѕР№РєР° Р·Р°РїСѓСЃРєР° РґР»СЏ РІС‹Р±СЂР°РЅРЅРѕРіРѕ РґР°С‚Р°СЃРµС‚Р°</p>
                     </div>
                   </div>
 
@@ -1134,7 +1096,7 @@ async function renderDatasetsPage() {
                   <form id="launchRunForm">
                     <div class="form-grid">
                       <div class="form-group">
-                        <label for="targetMetric">Целевая метрика</label>
+                        <label for="targetMetric">Р¦РµР»РµРІР°СЏ РјРµС‚СЂРёРєР°</label>
                         <select id="targetMetric" name="targetMetric" ${datasetDetail.availableMetrics?.length ? "" : "disabled"}>
                           ${
                             datasetDetail.availableMetrics?.length
@@ -1142,13 +1104,13 @@ async function renderDatasetsPage() {
                                   datasetDetail.availableMetrics.map((value) => ({ value, label: value })),
                                   datasetDetail.settings?.targetMetric
                                 )
-                              : `<option value="">Нет доступных метрик</option>`
+                              : `<option value="">РќРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… РјРµС‚СЂРёРє</option>`
                           }
                         </select>
                       </div>
 
                       <div class="form-group">
-                        <label for="device">Устройство</label>
+                        <label for="device">РЈСЃС‚СЂРѕР№СЃС‚РІРѕ</label>
                         <select id="device" name="device">
                           ${optionMarkup(
                             (datasetDetail.availableDevices?.length
@@ -1165,50 +1127,50 @@ async function renderDatasetsPage() {
 
 
                       <div class="form-group">
-                        <label for="runNotes">Комментарий</label>
-                        <input id="runNotes" name="notes" type="text" placeholder="Необязательно" />
+                        <label for="runNotes">РљРѕРјРјРµРЅС‚Р°СЂРёР№</label>
+                        <input id="runNotes" name="notes" type="text" placeholder="РќРµРѕР±СЏР·Р°С‚РµР»СЊРЅРѕ" />
                       </div>
                     </div>
 
                     <div class="form-group">
-                      <label for="searchAlg">Алгоритм Поиска</label>
+                      <label for="searchAlg">РђР»РіРѕСЂРёС‚Рј РџРѕРёСЃРєР°</label>
                       <select id="searchAlg" name="searchAlg">
                         ${optionMarkup(
-                          (datasetDetail.searchAlgorithm?.length
-                            ? datasetDetail.searchAlgorithm
-                            : ["GridSearch", "RandomSearch"]
+                          (datasetDetail.availableSearchAlgorithms?.length
+                            ? datasetDetail.availableSearchAlgorithms
+                            : ["OptunaTPE"]
                           ).map((value) => ({ value, label: value.toUpperCase() })),
-                          datasetDetail.settings?.searchAlgorithm || "GridSearch"
+                          datasetDetail.settings?.searchAlgorithm || "OptunaTPE"
                         )}
                         </select>
                       </div>
-                      <div class="form-group" id="randomSearchIterationsGroup" style="display: none;">
-                        <label for="randomSearchIterations">Количество комбинаций (RandomSearch)</label>
-                        <input type="number" id="randomSearchIterations" name="randomSearchIterations" min="1" max="1000" value="10" step="1"
+                      <div class="form-group" id="optunaTrialsGroup">
+                        <label for="optunaTrials">Trial Count (Optuna TPE)</label>
+                        <input type="number" id="optunaTrials" name="optunaTrials" min="1" max="1000" value="10" step="1"
                           class="form-control"
                         />
-                        <small class="form-text text-muted">Количество случайных комбинаций гиперпараметров (1-1000)</small>
+                        <small class="form-text text-muted">Number of Optuna trials (1-1000)</small>
                       </div>
 
                       <div class="form-group">
-                        <label>Гиперпараметры</label>
+                        <label>Р“РёРїРµСЂРїР°СЂР°РјРµС‚СЂС‹</label>
                         <div id="hyperparamsContainer">
                           <div class="hyperparam-row">
-                            <input type="text" name="hyperparam_name[]" placeholder="Название" class="hyperparam-name" />
-                            <!-- select будет заменен на hidden в зависимости от алгоритма -->
+                            <input type="text" name="hyperparam_name[]" placeholder="РќР°Р·РІР°РЅРёРµ" class="hyperparam-name" />
+                            <!-- select Р±СѓРґРµС‚ Р·Р°РјРµРЅРµРЅ РЅР° hidden РІ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РѕС‚ Р°Р»РіРѕСЂРёС‚РјР° -->
                             <select name="hyperparam_type[]" class="hyperparam-type">
-                              <option value="list">Список значений</option>
-                              <option value="range">Диапазон (мин макс)</option>
+                              <option value="list">РЎРїРёСЃРѕРє Р·РЅР°С‡РµРЅРёР№</option>
+                              <option value="range">Р”РёР°РїР°Р·РѕРЅ (РјРёРЅ РјР°РєСЃ)</option>
                             </select>
-                            <input type="text" name="hyperparam_values[]" placeholder="Значения: 0.001 0.01 0.1" class="hyperparam-values" />
-                            <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">✖</button>
+                            <input type="text" name="hyperparam_values[]" placeholder="Р—РЅР°С‡РµРЅРёСЏ: 0.001 0.01 0.1" class="hyperparam-values" />
+                            <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">вњ–</button>
                           </div>
                         </div>
-                        <button type="button" id="addHyperparamBtn" class="btn-add-param">+ Добавить гиперпараметр</button>
+                        <button type="button" id="addHyperparamBtn" class="btn-add-param">+ Р”РѕР±Р°РІРёС‚СЊ РіРёРїРµСЂРїР°СЂР°РјРµС‚СЂ</button>
                       </div>
                     <div class="form-actions">
                       <button class="btn btn-primary" type="submit" ${yamlReady ? "" : "disabled"}>
-                        Запустить AutoML
+                        Р—Р°РїСѓСЃС‚РёС‚СЊ AutoML
                       </button>
                     </div>
                   </form>
@@ -1218,8 +1180,8 @@ async function renderDatasetsPage() {
                 <article class="run-summary-card">
                   <div class="card-header">
                     <div>
-                      <h3 class="card-title" style="font-size:20px;">Лучшие модели</h3>
-                      <p class="card-subtitle">Результаты по выбранному датасету</p>
+                      <h3 class="card-title" style="font-size:20px;">Р›СѓС‡С€РёРµ РјРѕРґРµР»Рё</h3>
+                      <p class="card-subtitle">Р РµР·СѓР»СЊС‚Р°С‚С‹ РїРѕ РІС‹Р±СЂР°РЅРЅРѕРјСѓ РґР°С‚Р°СЃРµС‚Сѓ</p>
                     </div>
                   </div>
 
@@ -1253,7 +1215,7 @@ async function renderDatasetsPage() {
                           </table>
                         </div>
                       `
-                      : `<div class="empty-state">По датасету пока нет обученных моделей.</div>`
+                      : `<div class="empty-state">РџРѕ РґР°С‚Р°СЃРµС‚Сѓ РїРѕРєР° РЅРµС‚ РѕР±СѓС‡РµРЅРЅС‹С… РјРѕРґРµР»РµР№.</div>`
                   }
                 </article>
               </div>
@@ -1261,8 +1223,8 @@ async function renderDatasetsPage() {
               <article class="run-summary-card" style="margin-top:16px;">
                 <div class="card-header">
                   <div>
-                    <h3 class="card-title" style="font-size:20px;">Последние запуски по датасету</h3>
-                    <p class="card-subtitle">Переход к деталям запуска</p>
+                    <h3 class="card-title" style="font-size:20px;">РџРѕСЃР»РµРґРЅРёРµ Р·Р°РїСѓСЃРєРё РїРѕ РґР°С‚Р°СЃРµС‚Сѓ</h3>
+                    <p class="card-subtitle">РџРµСЂРµС…РѕРґ Рє РґРµС‚Р°Р»СЏРј Р·Р°РїСѓСЃРєР°</p>
                   </div>
                 </div>
 
@@ -1288,7 +1250,7 @@ async function renderDatasetsPage() {
                                     <td>${escapeHtml(run.id)}</td>
                                     <td>${renderStatus(run.status)}</td>
                                     <td>${escapeHtml(formatDateTime(run.startedAt))}</td>
-                                    <td>${escapeHtml(run.bestModel || "—")}</td>
+                                    <td>${escapeHtml(run.bestModel || "вЂ”")}</td>
                                     <td>${metricValue(run.bestMap, 2)}</td>
                                   </tr>
                                 `
@@ -1298,14 +1260,14 @@ async function renderDatasetsPage() {
                         </table>
                       </div>
                     `
-                    : `<div class="empty-state">По этому датасету ещё нет запусков</div>`
+                    : `<div class="empty-state">РџРѕ СЌС‚РѕРјСѓ РґР°С‚Р°СЃРµС‚Сѓ РµС‰С‘ РЅРµС‚ Р·Р°РїСѓСЃРєРѕРІ</div>`
                 }
               </article>
             </section>
           `
           : `
             <section class="card">
-              <div class="empty-state">Выберите датасет или загрузите новый</div>
+              <div class="empty-state">Р’С‹Р±РµСЂРёС‚Рµ РґР°С‚Р°СЃРµС‚ РёР»Рё Р·Р°РіСЂСѓР·РёС‚Рµ РЅРѕРІС‹Р№</div>
             </section>
           `
       }
@@ -1331,7 +1293,7 @@ async function renderDatasetsPage() {
         datasetFileValue.size >= 0;
 
       if (!datasetSourceValue && !hasDatasetFile) {
-        throw new Error("Выберите датасет из списка или загрузите архив / YAML файл.");
+        throw new Error("Р’С‹Р±РµСЂРёС‚Рµ РґР°С‚Р°СЃРµС‚ РёР· СЃРїРёСЃРєР° РёР»Рё Р·Р°РіСЂСѓР·РёС‚Рµ Р°СЂС…РёРІ / YAML С„Р°Р№Р».");
       }
 
       if (datasetSourceValue) {
@@ -1354,13 +1316,13 @@ async function renderDatasetsPage() {
       state.activeDatasetId = created?.id || state.datasets[0]?.id || null;
       showNotice(
         created?.yamlReady
-          ? "Датасет загружен, data.yaml настроен."
-          : "Датасет загружен. data.yaml пока не настроен.",
+          ? "Р”Р°С‚Р°СЃРµС‚ Р·Р°РіСЂСѓР¶РµРЅ, data.yaml РЅР°СЃС‚СЂРѕРµРЅ."
+          : "Р”Р°С‚Р°СЃРµС‚ Р·Р°РіСЂСѓР¶РµРЅ. data.yaml РїРѕРєР° РЅРµ РЅР°СЃС‚СЂРѕРµРЅ.",
         created?.yamlReady ? "success" : "warning"
       );
       await renderDatasetsPage();
     } catch (error) {
-      showNotice(error.message || "Не удалось загрузить датасет.", "error");
+      showNotice(error.message || "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґР°С‚Р°СЃРµС‚.", "error");
     } finally {
       if (submitButton) submitButton.disabled = false;
     }
@@ -1383,9 +1345,9 @@ async function renderDatasetsPage() {
 
   setTrainingMonitorVisible(true);
   state.trainingMonitor.runId = null;
-  setTrainingMonitorStatus("Подготовка запуска...");
+  setTrainingMonitorStatus("РџРѕРґРіРѕС‚РѕРІРєР° Р·Р°РїСѓСЃРєР°...");
   setTrainingMonitorLogs("");
-  appendTrainingMonitorLog(trainingMonitorLine("Подготовка параметров запуска"));
+  appendTrainingMonitorLog(trainingMonitorLine("РџРѕРґРіРѕС‚РѕРІРєР° РїР°СЂР°РјРµС‚СЂРѕРІ Р·Р°РїСѓСЃРєР°"));
 
   try {
     if (!datasetDetail?.yamlPath) {
@@ -1397,14 +1359,12 @@ async function renderDatasetsPage() {
     const hyperparams = collectHyperparams();
     if (Object.keys(hyperparams).length > 0) {
       payload.hyperparams = hyperparams;
-      appendTrainingMonitorLog(trainingMonitorLine(`Добавлено ${Object.keys(hyperparams).length} гиперпараметров`));
+      appendTrainingMonitorLog(trainingMonitorLine(`Р”РѕР±Р°РІР»РµРЅРѕ ${Object.keys(hyperparams).length} РіРёРїРµСЂРїР°СЂР°РјРµС‚СЂРѕРІ`));
     }
-    if (payload.searchAlg === "RandomSearch") {
-      const iterations = payload.randomSearchIterations || 10;
-      payload.randomSearchIterations = iterations;
-      appendTrainingMonitorLog(trainingMonitorLine(`RandomSearch: будет сгенерировано ${iterations} комбинаций`));
-    }
-    appendTrainingMonitorLog(trainingMonitorLine("Отправка запроса на запуск обучения"));
+    const trials = payload.optunaTrials || 10;
+    payload.optunaTrials = trials;
+    appendTrainingMonitorLog(trainingMonitorLine(`Optuna TPE: planned ${trials} trial(s)`));
+    appendTrainingMonitorLog(trainingMonitorLine("РћС‚РїСЂР°РІРєР° Р·Р°РїСЂРѕСЃР° РЅР° Р·Р°РїСѓСЃРє РѕР±СѓС‡РµРЅРёСЏ"));
 
     const response = await api(`/datasets/${state.activeDatasetId}/runs`, {
       method: "POST",
@@ -1421,9 +1381,9 @@ async function renderDatasetsPage() {
         .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0]?.id;
 
     if (!runId) {
-      setTrainingMonitorStatus("Запуск создан, но id не вернулся.");
-      appendTrainingMonitorLog(trainingMonitorLine("Не удалось определить id запуска"));
-      showNotice("Запуск создан, но id не вернулся.", "warning");
+      setTrainingMonitorStatus("Р—Р°РїСѓСЃРє СЃРѕР·РґР°РЅ, РЅРѕ id РЅРµ РІРµСЂРЅСѓР»СЃСЏ.");
+      appendTrainingMonitorLog(trainingMonitorLine("РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСЂРµРґРµР»РёС‚СЊ id Р·Р°РїСѓСЃРєР°"));
+      showNotice("Р—Р°РїСѓСЃРє СЃРѕР·РґР°РЅ, РЅРѕ id РЅРµ РІРµСЂРЅСѓР»СЃСЏ.", "warning");
       return;
     }
 
@@ -1431,15 +1391,15 @@ async function renderDatasetsPage() {
     state.runTab = "logs";
     state.trainingMonitor.runId = runId;
 
-    setTrainingMonitorStatus("Запуск создан");
-    appendTrainingMonitorLog(trainingMonitorLine(`Запуск создан: ${runId}`));
-    showNotice("Обучение запущено.", "success");
+    setTrainingMonitorStatus("Р—Р°РїСѓСЃРє СЃРѕР·РґР°РЅ");
+    appendTrainingMonitorLog(trainingMonitorLine(`Р—Р°РїСѓСЃРє СЃРѕР·РґР°РЅ: ${runId}`));
+    showNotice("РћР±СѓС‡РµРЅРёРµ Р·Р°РїСѓС‰РµРЅРѕ.", "success");
 
     window.location.hash = `#runs/${runId}`;
   } catch (error) {
-    const message = error.message || "Не удалось запустить AutoML";
-    setTrainingMonitorStatus(`Ошибка: ${message}`);
-    appendTrainingMonitorLog(trainingMonitorLine(`Ошибка запуска: ${message}`));
+    const message = error.message || "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїСѓСЃС‚РёС‚СЊ AutoML";
+    setTrainingMonitorStatus(`РћС€РёР±РєР°: ${message}`);
+    appendTrainingMonitorLog(trainingMonitorLine(`РћС€РёР±РєР° Р·Р°РїСѓСЃРєР°: ${message}`));
     showNotice(message, "error");
   } finally {
     if (button) button.disabled = false;
@@ -1455,20 +1415,10 @@ async function renderDatasetsPage() {
   });
 
   const searchAlgSelect = qs("#searchAlg");
-  const iterationsGroup = qs("#randomSearchIterationsGroup");
-
-  function toggleIterationsField() {
-    if (searchAlgSelect && iterationsGroup) {
-      const isRandomSearch = searchAlgSelect.value === "RandomSearch";
-      iterationsGroup.style.display = isRandomSearch ? "block" : "none";
-      toggleHyperparamTypes();
-    }
-  }
-
   if (searchAlgSelect) {
-    searchAlgSelect.addEventListener("change", toggleIterationsField);
-    toggleIterationsField(); 
+    searchAlgSelect.addEventListener("change", toggleHyperparamTypes);
   }
+  toggleHyperparamTypes();
 
   const addBtn = qs("#addHyperparamBtn");
   if (addBtn) {
@@ -1481,7 +1431,7 @@ async function renderDatasetsPage() {
 }
 
 function renderRunsPage() {
-  setPageMeta("Runs", "История запусков");
+  setPageMeta("Runs", "РСЃС‚РѕСЂРёСЏ Р·Р°РїСѓСЃРєРѕРІ");
 
   const sortedRuns = [...state.runs].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
 
@@ -1490,16 +1440,16 @@ function renderRunsPage() {
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Все запуски</h2>
-            <p class="card-subtitle">Фильтрация и переход к деталям</p>
+            <h2 class="card-title">Р’СЃРµ Р·Р°РїСѓСЃРєРё</h2>
+            <p class="card-subtitle">Р¤РёР»СЊС‚СЂР°С†РёСЏ Рё РїРµСЂРµС…РѕРґ Рє РґРµС‚Р°Р»СЏРј</p>
           </div>
         </div>
 
         <div class="filters">
           <div class="form-group">
-            <label for="runsDatasetFilter">Датасет</label>
+            <label for="runsDatasetFilter">Р”Р°С‚Р°СЃРµС‚</label>
             <select id="runsDatasetFilter">
-              <option value="">Все</option>
+              <option value="">Р’СЃРµ</option>
               ${state.datasets
                 .map(
                   (dataset) =>
@@ -1510,9 +1460,9 @@ function renderRunsPage() {
           </div>
 
           <div class="form-group">
-            <label for="runsStatusFilter">Статус</label>
+            <label for="runsStatusFilter">РЎС‚Р°С‚СѓСЃ</label>
             <select id="runsStatusFilter">
-              <option value="">Все</option>
+              <option value="">Р’СЃРµ</option>
               <option value="running">running</option>
               <option value="finished">finished</option>
               <option value="queued">queued</option>
@@ -1521,7 +1471,7 @@ function renderRunsPage() {
           </div>
 
           <div class="form-group">
-            <label for="runsSearch">Поиск</label>
+            <label for="runsSearch">РџРѕРёСЃРє</label>
             <input id="runsSearch" type="text" placeholder="run / dataset / model" />
           </div>
         </div>
@@ -1557,14 +1507,14 @@ function renderRunsPage() {
                             )}"
                           >
                             <td>${escapeHtml(run.id)}</td>
-                            <td>${escapeHtml(run.datasetName || "—")}</td>
+                            <td>${escapeHtml(run.datasetName || "вЂ”")}</td>
                             <td>${renderStatus(run.status)}</td>
                             <td>${escapeHtml(formatDateTime(run.startedAt))}</td>
                             <td>${escapeHtml(formatDateTime(run.finishedAt))}</td>
-                            <td>${escapeHtml(run.bestModel || "—")}</td>
+                            <td>${escapeHtml(run.bestModel || "вЂ”")}</td>
                             <td>${metricValue(run.bestMap, 2)}</td>
-                            <td>${escapeHtml(run.device || run.gpu || "—")}</td>
-                            <td>${escapeHtml(run.searchAlgorithm || "—")}</td>
+                            <td>${escapeHtml(run.device || run.gpu || "вЂ”")}</td>
+                            <td>${escapeHtml(run.searchAlgorithm || "вЂ”")}</td>
                           </tr>
                         `
                       )
@@ -1573,7 +1523,7 @@ function renderRunsPage() {
                 </table>
               </div>
             `
-            : `<div class="empty-state">Запусков пока нет</div>`
+            : `<div class="empty-state">Р—Р°РїСѓСЃРєРѕРІ РїРѕРєР° РЅРµС‚</div>`
         }
       </section>
     </div>
@@ -1616,8 +1566,8 @@ function renderRunOverview(detail) {
   return `
     <div class="page-stack">
       <section class="grid-4">
-        ${renderKpi("Best model", escapeHtml(summary.bestModel || "—"), "Лидер запуска")}
-        ${renderKpi("Best mAP", metricValue(summary.bestMap, 2), "Качество")}
+        ${renderKpi("Best model", escapeHtml(summary.bestModel || "вЂ”"), "Р›РёРґРµСЂ Р·Р°РїСѓСЃРєР°")}
+        ${renderKpi("Best mAP", metricValue(summary.bestMap, 2), "РљР°С‡РµСЃС‚РІРѕ")}
         ${renderKpi("Best precision", metricValue(summary.bestPrecision, 2), "Precision")}
         ${renderKpi("Best recall", metricValue(summary.bestRecall, 2), "Recall")}
       </section>
@@ -1626,22 +1576,22 @@ function renderRunOverview(detail) {
         <article class="card">
           <div class="card-header">
             <div>
-              <h3 class="card-title" style="font-size:20px;">Сводка запуска</h3>
-              <p class="card-subtitle">Основные параметры</p>
+              <h3 class="card-title" style="font-size:20px;">РЎРІРѕРґРєР° Р·Р°РїСѓСЃРєР°</h3>
+              <p class="card-subtitle">РћСЃРЅРѕРІРЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹</p>
             </div>
           </div>
 
           <div class="table-wrap">
             <table class="table">
               <tbody>
-                <tr><th>Run</th><td>${escapeHtml(detail.id || "—")}</td></tr>
-                <tr><th>Dataset</th><td>${escapeHtml(detail.datasetName || "—")}</td></tr>
+                <tr><th>Run</th><td>${escapeHtml(detail.id || "вЂ”")}</td></tr>
+                <tr><th>Dataset</th><td>${escapeHtml(detail.datasetName || "вЂ”")}</td></tr>
                 <tr><th>Status</th><td>${renderStatus(detail.status)}</td></tr>
                 <tr><th>Started</th><td>${escapeHtml(formatDateTime(detail.startedAt))}</td></tr>
                 <tr><th>Finished</th><td>${escapeHtml(formatDateTime(detail.finishedAt))}</td></tr>
-                <tr><th>Metric</th><td>${escapeHtml(detail.targetMetric || "—")}</td></tr>
-                <tr><th>Device</th><td>${escapeHtml(detail.device || detail.gpu || "—")}</td></tr>
-                <tr><th>Search Algorithm</th><td>${escapeHtml(detail.searchAlgorithm || "—")}</td></tr>
+                <tr><th>Metric</th><td>${escapeHtml(detail.targetMetric || "вЂ”")}</td></tr>
+                <tr><th>Device</th><td>${escapeHtml(detail.device || detail.gpu || "вЂ”")}</td></tr>
+                <tr><th>Search Algorithm</th><td>${escapeHtml(detail.searchAlgorithm || "вЂ”")}</td></tr>
               </tbody>
             </table>
           </div>
@@ -1650,8 +1600,8 @@ function renderRunOverview(detail) {
         <article class="card">
           <div class="card-header">
             <div>
-              <h3 class="card-title" style="font-size:20px;">Лучшие модели</h3>
-              <p class="card-subtitle">Результаты текущего запуска</p>
+              <h3 class="card-title" style="font-size:20px;">Р›СѓС‡С€РёРµ РјРѕРґРµР»Рё</h3>
+              <p class="card-subtitle">Р РµР·СѓР»СЊС‚Р°С‚С‹ С‚РµРєСѓС‰РµРіРѕ Р·Р°РїСѓСЃРєР°</p>
             </div>
           </div>
 
@@ -1686,7 +1636,7 @@ function renderRunOverview(detail) {
                   </table>
                 </div>
               `
-              : `<div class="empty-state">Модели ещё не доступны.</div>`
+              : `<div class="empty-state">РњРѕРґРµР»Рё РµС‰С‘ РЅРµ РґРѕСЃС‚СѓРїРЅС‹.</div>`
           }
         </article>
       </section>
@@ -1699,8 +1649,8 @@ function renderRunModels(detail) {
     <section class="card">
       <div class="card-header">
         <div>
-          <h3 class="card-title" style="font-size:20px;">Модели и параметры</h3>
-          <p class="card-subtitle">Итоговые параметры после обучения</p>
+          <h3 class="card-title" style="font-size:20px;">РњРѕРґРµР»Рё Рё РїР°СЂР°РјРµС‚СЂС‹</h3>
+          <p class="card-subtitle">РС‚РѕРіРѕРІС‹Рµ РїР°СЂР°РјРµС‚СЂС‹ РїРѕСЃР»Рµ РѕР±СѓС‡РµРЅРёСЏ</p>
         </div>
       </div>
 
@@ -1717,7 +1667,7 @@ function renderRunModels(detail) {
                     <th>R</th>
                     <th>FPS</th>
                     <th>Size</th>
-                    <th>Параметры</th>
+                    <th>РџР°СЂР°РјРµС‚СЂС‹</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1742,7 +1692,7 @@ function renderRunModels(detail) {
                                           `<span class="param-chip">${escapeHtml(key)}: ${escapeHtml(String(value))}</span>`
                                       )
                                       .join("")
-                                  : `<span class="param-chip">Нет параметров</span>`
+                                  : `<span class="param-chip">РќРµС‚ РїР°СЂР°РјРµС‚СЂРѕРІ</span>`
                               }
                             </div>
                           </td>
@@ -1754,7 +1704,7 @@ function renderRunModels(detail) {
               </table>
             </div>
           `
-          : `<div class="empty-state">Нет данных по моделям.</div>`
+          : `<div class="empty-state">РќРµС‚ РґР°РЅРЅС‹С… РїРѕ РјРѕРґРµР»СЏРј.</div>`
       }
     </section>
   `;
@@ -1765,8 +1715,8 @@ function renderRunEdge(detail) {
     <section class="card">
       <div class="card-header">
         <div>
-          <h3 class="card-title" style="font-size:20px;">Графики обучения</h3>
-          <p class="card-subtitle">История обучения моделей данного запуска</p>
+          <h3 class="card-title" style="font-size:20px;">Р“СЂР°С„РёРєРё РѕР±СѓС‡РµРЅРёСЏ</h3>
+          <p class="card-subtitle">РСЃС‚РѕСЂРёСЏ РѕР±СѓС‡РµРЅРёСЏ РјРѕРґРµР»РµР№ РґР°РЅРЅРѕРіРѕ Р·Р°РїСѓСЃРєР°</p>
         </div>
       </div>
 
@@ -1808,7 +1758,7 @@ function renderRunEdge(detail) {
                 .join("")}
             </div>
           `
-          : `<div class="empty-state">Графики обучения пока недоступны.</div>`
+          : `<div class="empty-state">Р“СЂР°С„РёРєРё РѕР±СѓС‡РµРЅРёСЏ РїРѕРєР° РЅРµРґРѕСЃС‚СѓРїРЅС‹.</div>`
       }
     </section>
   `;
@@ -1828,26 +1778,26 @@ function fileNameFromUrl(url, fallback = "best.pt") {
 async function renderRunDetailPage(runId) {
   const detail = await ensureRunDetail(runId);
   if (!detail) {
-    renderRoot(`<div class="empty-state">Запуск не найден.</div>`);
+    renderRoot(`<div class="empty-state">Р—Р°РїСѓСЃРє РЅРµ РЅР°Р№РґРµРЅ.</div>`);
     return;
   }
 
   state.activeRunId = detail.id || runId;
   state.activeDatasetId = detail.datasetId || state.activeDatasetId;
 
-  setPageMeta(`Run #${detail.id || runId}`, "Метрики, модели, графики и логи");
+  setPageMeta(`Run #${detail.id || runId}`, "РњРµС‚СЂРёРєРё, РјРѕРґРµР»Рё, РіСЂР°С„РёРєРё Рё Р»РѕРіРё");
 
   const tab = state.runTab || "overview";
 
   renderRoot(`
     <div class="page-stack">
-      <a href="#runs" class="chip" style="width:max-content;">← Назад к Runs</a>
+      <a href="#runs" class="chip" style="width:max-content;">в†ђ РќР°Р·Р°Рґ Рє Runs</a>
 
       <section class="card">
         <div class="card-header">
           <div>
             <h2 class="card-title">Run #${escapeHtml(detail.id || runId)}</h2>
-            <p class="card-subtitle">${escapeHtml(detail.datasetName || "—")}</p>
+            <p class="card-subtitle">${escapeHtml(detail.datasetName || "вЂ”")}</p>
           </div>
           <div class="inline-actions">
             <button class="btn btn-secondary" id="openCompareFromRun" type="button">Compare</button>
@@ -1879,7 +1829,7 @@ async function renderRunDetailPage(runId) {
 
   if (detail.errorMessage) {
     showNotice(
-      detail.status === "finished" ? detail.errorMessage : `Ошибка запуска: ${detail.errorMessage}`,
+      detail.status === "finished" ? detail.errorMessage : `РћС€РёР±РєР° Р·Р°РїСѓСЃРєР°: ${detail.errorMessage}`,
       detail.status === "finished" ? "warning" : "error"
     );
   }
@@ -1915,7 +1865,7 @@ async function renderRunDetailPage(runId) {
 }
 
 async function renderComparePage() {
-  setPageMeta("Compare", "Сравнение запусков по одному датасету");
+  setPageMeta("Compare", "РЎСЂР°РІРЅРµРЅРёРµ Р·Р°РїСѓСЃРєРѕРІ РїРѕ РѕРґРЅРѕРјСѓ РґР°С‚Р°СЃРµС‚Сѓ");
 
   const datasetId = state.compareDatasetId || state.activeDatasetId || state.datasets[0]?.id || null;
   state.compareDatasetId = datasetId;
@@ -1954,7 +1904,7 @@ async function renderComparePage() {
     <div class="compare-layout">
       <aside class="compare-sidebar">
         <div class="form-group" style="margin-bottom:14px;">
-          <label for="compareDatasetSelect">Датасет</label>
+          <label for="compareDatasetSelect">Р”Р°С‚Р°СЃРµС‚</label>
           <select id="compareDatasetSelect">
             ${state.datasets
               .map(
@@ -1967,7 +1917,7 @@ async function renderComparePage() {
           </select>
         </div>
 
-        <div class="helper-text" style="margin-bottom:12px;">Выберите несколько запусков.</div>
+        <div class="helper-text" style="margin-bottom:12px;">Р’С‹Р±РµСЂРёС‚Рµ РЅРµСЃРєРѕР»СЊРєРѕ Р·Р°РїСѓСЃРєРѕРІ.</div>
 
         <div class="compare-run-list" id="compareRunList">
           ${
@@ -1987,8 +1937,8 @@ async function renderComparePage() {
                             <strong>Run #${escapeHtml(run.id)}</strong>
                             <div class="compare-run-meta">
                               ${escapeHtml(formatDateTime(run.startedAt))}<br />
-                              ${escapeHtml(run.bestModel || "—")} · ${metricValue(run.bestMap, 2)} · ${escapeHtml(
-                              run.device || run.gpu || "—"
+                              ${escapeHtml(run.bestModel || "вЂ”")} В· ${metricValue(run.bestMap, 2)} В· ${escapeHtml(
+                              run.device || run.gpu || "вЂ”"
                             )}
                             </div>
                           </span>
@@ -1997,7 +1947,7 @@ async function renderComparePage() {
                     `
                   )
                   .join("")
-              : `<div class="empty-state">Для этого датасета пока нет запусков</div>`
+              : `<div class="empty-state">Р”Р»СЏ СЌС‚РѕРіРѕ РґР°С‚Р°СЃРµС‚Р° РїРѕРєР° РЅРµС‚ Р·Р°РїСѓСЃРєРѕРІ</div>`
           }
         </div>
       </aside>
@@ -2005,8 +1955,8 @@ async function renderComparePage() {
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Сравнение запусков</h2>
-            <p class="card-subtitle">Качество, скорость и итоговые параметры</p>
+            <h2 class="card-title">РЎСЂР°РІРЅРµРЅРёРµ Р·Р°РїСѓСЃРєРѕРІ</h2>
+            <p class="card-subtitle">РљР°С‡РµСЃС‚РІРѕ, СЃРєРѕСЂРѕСЃС‚СЊ Рё РёС‚РѕРіРѕРІС‹Рµ РїР°СЂР°РјРµС‚СЂС‹</p>
           </div>
         </div>
 
@@ -2017,7 +1967,7 @@ async function renderComparePage() {
                 <table class="table">
                   <thead>
                     <tr>
-                      <th>Параметр</th>
+                      <th>РџР°СЂР°РјРµС‚СЂ</th>
                       ${compareItems
                         .map((item) => `<th>Run #${escapeHtml(item.detail.id)}</th>`)
                         .join("")}
@@ -2031,7 +1981,7 @@ async function renderComparePage() {
                     <tr>
                       <td><strong>Best model</strong></td>
                       ${compareItems
-                        .map((item) => `<td>${escapeHtml(item.bestModel?.name || "—")}</td>`)
+                        .map((item) => `<td>${escapeHtml(item.bestModel?.name || "вЂ”")}</td>`)
                         .join("")}
                     </tr>
                     <tr>
@@ -2096,7 +2046,7 @@ async function renderComparePage() {
                         .map(
                           (item) =>
                             `<td>${escapeHtml(
-                              item.bestModel?.trainedParams?.device || item.detail.device || "—"
+                              item.bestModel?.trainedParams?.device || item.detail.device || "вЂ”"
                             )}</td>`
                         )
                         .join("")}
@@ -2107,7 +2057,7 @@ async function renderComparePage() {
                         .map(
                           (item) =>
                             `<td>${escapeHtml(
-                              String(item.bestModel?.trainedParams?.epochs ?? "—")
+                              String(item.bestModel?.trainedParams?.epochs ?? "вЂ”")
                             )}</td>`
                         )
                         .join("")}
@@ -2118,7 +2068,7 @@ async function renderComparePage() {
                         .map(
                           (item) =>
                             `<td>${escapeHtml(
-                              String(item.bestModel?.trainedParams?.batchSize ?? "—")
+                              String(item.bestModel?.trainedParams?.batchSize ?? "вЂ”")
                             )}</td>`
                         )
                         .join("")}
@@ -2129,7 +2079,7 @@ async function renderComparePage() {
                         .map(
                           (item) =>
                             `<td>${escapeHtml(
-                              String(item.bestModel?.trainedParams?.imageSize ?? "—")
+                              String(item.bestModel?.trainedParams?.imageSize ?? "вЂ”")
                             )}</td>`
                         )
                         .join("")}
@@ -2139,7 +2089,7 @@ async function renderComparePage() {
                       ${compareItems
                         .map(
                           (item) =>
-                            `<td>${escapeHtml(item.bestModel?.trainedParams?.optimizer || "—")}</td>`
+                            `<td>${escapeHtml(item.bestModel?.trainedParams?.optimizer || "вЂ”")}</td>`
                         )
                         .join("")}
                     </tr>
@@ -2147,7 +2097,7 @@ async function renderComparePage() {
                 </table>
               </div>
             `
-            : `<div class="empty-state">Выберите минимум два запуска для сравнения</div>`
+            : `<div class="empty-state">Р’С‹Р±РµСЂРёС‚Рµ РјРёРЅРёРјСѓРј РґРІР° Р·Р°РїСѓСЃРєР° РґР»СЏ СЃСЂР°РІРЅРµРЅРёСЏ</div>`
         }
       </section>
     </div>
@@ -2170,7 +2120,7 @@ async function renderComparePage() {
 }
 
 function renderExportsPage() {
-  setPageMeta("Exports", "Выгрузка конфигураций запусков");
+  setPageMeta("Exports", "Р’С‹РіСЂСѓР·РєР° РєРѕРЅС„РёРіСѓСЂР°С†РёР№ Р·Р°РїСѓСЃРєРѕРІ");
 
   const datasetId = state.activeDatasetId || state.datasets[0]?.id || "";
   const filteredRuns = datasetId ? getRunsByDataset(datasetId) : state.runs;
@@ -2180,13 +2130,13 @@ function renderExportsPage() {
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Экспорт конфигураций</h2>
-            <p class="card-subtitle">Скачивание данных по отдельным запускам</p>
+            <h2 class="card-title">Р­РєСЃРїРѕСЂС‚ РєРѕРЅС„РёРіСѓСЂР°С†РёР№</h2>
+            <p class="card-subtitle">РЎРєР°С‡РёРІР°РЅРёРµ РґР°РЅРЅС‹С… РїРѕ РѕС‚РґРµР»СЊРЅС‹Рј Р·Р°РїСѓСЃРєР°Рј</p>
           </div>
         </div>
 
         <div class="form-group" style="max-width:360px; margin-bottom:16px;">
-          <label for="exportsDatasetSelect">Датасет</label>
+          <label for="exportsDatasetSelect">Р”Р°С‚Р°СЃРµС‚</label>
           <select id="exportsDatasetSelect">
             ${state.datasets
               .map(
@@ -2210,15 +2160,15 @@ function renderExportsPage() {
                         <div class="dataset-card-header">
                           <div>
                             <div class="dataset-name">Run #${escapeHtml(run.id)}</div>
-                            <div class="dataset-meta">${escapeHtml(run.datasetName || "—")}</div>
+                            <div class="dataset-meta">${escapeHtml(run.datasetName || "вЂ”")}</div>
                           </div>
                           ${renderStatus(run.status)}
                         </div>
 
                         <div class="meta-chips">
-                          <span class="chip">Best model: ${escapeHtml(run.bestModel || "—")}</span>
+                          <span class="chip">Best model: ${escapeHtml(run.bestModel || "вЂ”")}</span>
                           <span class="chip">mAP: ${metricValue(run.bestMap, 2)}</span>
-                          <span class="chip">Device: ${escapeHtml(run.device || run.gpu || "—")}</span>
+                          <span class="chip">Device: ${escapeHtml(run.device || run.gpu || "вЂ”")}</span>
                         </div>
 
                         <div class="form-actions" style="margin-top:14px;">
@@ -2236,7 +2186,7 @@ function renderExportsPage() {
                   .join("")}
               </div>
             `
-            : `<div class="empty-state">Нет запусков для экспорта</div>`
+            : `<div class="empty-state">РќРµС‚ Р·Р°РїСѓСЃРєРѕРІ РґР»СЏ СЌРєСЃРїРѕСЂС‚Р°</div>`
         }
       </section>
     </div>
@@ -2249,11 +2199,11 @@ function renderExportsPage() {
 }
 
 async function renderSettingsPage() {
-  setPageMeta("Settings", "Настройки выбранного датасета");
+  setPageMeta("Settings", "РќР°СЃС‚СЂРѕР№РєРё РІС‹Р±СЂР°РЅРЅРѕРіРѕ РґР°С‚Р°СЃРµС‚Р°");
 
   const datasetId = state.activeDatasetId || state.datasets[0]?.id || null;
   if (!datasetId) {
-    renderRoot(`<div class="empty-state">Нет датасетов для настройки</div>`);
+    renderRoot(`<div class="empty-state">РќРµС‚ РґР°С‚Р°СЃРµС‚РѕРІ РґР»СЏ РЅР°СЃС‚СЂРѕР№РєРё</div>`);
     return;
   }
 
@@ -2264,15 +2214,15 @@ async function renderSettingsPage() {
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Настройки датасета</h2>
-            <p class="card-subtitle">Изменение параметров выбранного датасета</p>
+            <h2 class="card-title">РќР°СЃС‚СЂРѕР№РєРё РґР°С‚Р°СЃРµС‚Р°</h2>
+            <p class="card-subtitle">РР·РјРµРЅРµРЅРёРµ РїР°СЂР°РјРµС‚СЂРѕРІ РІС‹Р±СЂР°РЅРЅРѕРіРѕ РґР°С‚Р°СЃРµС‚Р°</p>
           </div>
         </div>
 
         <form id="settingsForm">
           <div class="form-grid">
             <div class="form-group">
-              <label for="settingsDataset">Датасет</label>
+              <label for="settingsDataset">Р”Р°С‚Р°СЃРµС‚</label>
               <select id="settingsDataset" name="datasetId">
                 ${state.datasets
                   .map(
@@ -2286,13 +2236,13 @@ async function renderSettingsPage() {
             </div>
 
             <div class="form-group">
-              <label for="settingsName">Название</label>
+              <label for="settingsName">РќР°Р·РІР°РЅРёРµ</label>
               <input id="settingsName" name="name" type="text" value="${escapeHtml(detail.name || "")}" />
             </div>
           </div>
 
           <div class="form-group">
-            <label for="settingsDescription">Описание</label>
+            <label for="settingsDescription">РћРїРёСЃР°РЅРёРµ</label>
             <textarea id="settingsDescription" name="description">${escapeHtml(
               detail.description || ""
             )}</textarea>
@@ -2384,7 +2334,7 @@ async function renderSettingsPage() {
 
           <div class="form-grid">
             <div class="form-group">
-              <label for="settingsMetric">Метрика</label>
+              <label for="settingsMetric">РњРµС‚СЂРёРєР°</label>
               <select id="settingsMetric" name="targetMetric" ${
                 detail.availableMetrics?.length ? "" : "disabled"
               }>
@@ -2394,7 +2344,7 @@ async function renderSettingsPage() {
                         detail.availableMetrics.map((value) => ({ value, label: value })),
                         detail.settings?.targetMetric
                       )
-                    : `<option value="">Нет доступных метрик</option>`
+                    : `<option value="">РќРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… РјРµС‚СЂРёРє</option>`
                 }
               </select>
             </div>
@@ -2431,7 +2381,7 @@ async function renderSettingsPage() {
           </div>
 
           <div class="form-actions">
-            <button class="btn btn-primary" type="submit">Сохранить</button>
+            <button class="btn btn-primary" type="submit">РЎРѕС…СЂР°РЅРёС‚СЊ</button>
           </div>
         </form>
       </section>
@@ -2461,10 +2411,10 @@ async function renderSettingsPage() {
       delete state.datasetDetails[String(payload.datasetId)];
       await refreshCoreData();
       state.activeDatasetId = payload.datasetId;
-      showNotice("Настройки сохранены. YAML обновлен.", "success");
+      showNotice("РќР°СЃС‚СЂРѕР№РєРё СЃРѕС…СЂР°РЅРµРЅС‹. YAML РѕР±РЅРѕРІР»РµРЅ.", "success");
       await renderSettingsPage();
     } catch (error) {
-      showNotice(error.message || "Не удалось сохранить настройки.", "error");
+      showNotice(error.message || "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РЅР°СЃС‚СЂРѕР№РєРё.", "error");
     } finally {
       if (button) button.disabled = false;
     }
@@ -2507,7 +2457,7 @@ async function route() {
   } catch (error) {
     renderRoot(`
       <div class="notice error">
-        ${escapeHtml(error.message || "Ошибка загрузки данных.")}
+        ${escapeHtml(error.message || "РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РґР°РЅРЅС‹С….")}
       </div>
     `);
   }
@@ -2777,18 +2727,18 @@ function renderRunLogs() {
 
 async function bootstrap() {
   try {
-    setLoading("Загрузка данных...");
+    setLoading("Р—Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С…...");
     await refreshCoreData();
 
     qs("#refreshButton")?.addEventListener("click", async () => {
       try {
-        setLoading("Обновление...");
+        setLoading("РћР±РЅРѕРІР»РµРЅРёРµ...");
         state.datasetDetails = {};
         state.runDetails = {};
         await refreshCoreData();
         await route();
       } catch (error) {
-        showNotice(error.message || "Не удалось обновить данные.", "error");
+        showNotice(error.message || "РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ РґР°РЅРЅС‹Рµ.", "error");
       }
     });
 
@@ -2803,7 +2753,7 @@ async function bootstrap() {
   } catch (error) {
     renderRoot(`
       <div class="notice error">
-        ${escapeHtml(error.message || "Не удалось инициализировать интерфейс.")}
+        ${escapeHtml(error.message || "РќРµ СѓРґР°Р»РѕСЃСЊ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ РёРЅС‚РµСЂС„РµР№СЃ.")}
       </div>
     `);
   }
@@ -2849,3 +2799,4 @@ if (typeof module === "object" && module.exports) {
     fileNameFromUrl,
     };
 }
+
