@@ -287,6 +287,20 @@ def validate_uploaded_yaml_text(yaml_text: str) -> dict[str, Any]:
     if class_count is None or class_count <= 0:
         raise HTTPException(status_code=400, detail="YAML key 'nc' must be a positive integer")
 
+<<<<<<< Updated upstream
+=======
+    if "names" in payload:
+        class_names = normalize_yaml_names(payload.get("names"))
+        if len(class_names) != class_count:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "YAML keys 'nc' and 'names' are inconsistent: "
+                    f"nc={class_count}, names={len(class_names)}"
+                ),
+            )
+
+>>>>>>> Stashed changes
     payload["nc"] = class_count
     return payload
 
