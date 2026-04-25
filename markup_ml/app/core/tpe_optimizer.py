@@ -90,6 +90,9 @@ OPTIONAL_TRAINING_PARAMS = (
     "close_mosaic",
     "cos_lr",
 )
+STUDY_DB_NAME = "automl_study.db"
+STUDY_STORAGE_URI = f"sqlite:///{STUDY_DB_NAME}"
+STUDY_DB_SIDECARS = ("-shm", "-wal", "-journal")
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -209,12 +212,17 @@ class TPEOptimizer:
         self._search_space: dict[str, Any] = {}
         self._fixed_params: dict[str, Any] = {}
         self._best_result: Optional[dict[str, Any]] = None
+        self.project_root = Path.cwd().resolve()
+        self.study_db_path = self.project_root / STUDY_DB_NAME
+        self.study_name: Optional[str] = None
 
     def optimize(
         self,
         search_space: Optional[dict[str, Any]] = None,
         n_trials: int = 10,
         fixed_params: Optional[dict[str, Any]] = None,
+        study_name: Optional[str] = None,
+        reset_storage: bool = False,
     ) -> dict[str, Any]:
         self._ensure_optuna_available()
 
@@ -223,14 +231,21 @@ class TPEOptimizer:
         self.total_trials = max(1, int(n_trials))
         self._search_space = self._prepare_search_space(search_space)
         self._fixed_params = self._normalize_config(fixed_params or {})
+        self.study_name = self._resolve_study_name(study_name)
 
         if not self._fixed_params.get("data"):
             raise ValueError("Fixed training parameter 'data' is required for Optuna optimization")
+
+        if reset_storage:
+            self._reset_storage()
 
         sampler_kwargs = {"seed": self.seed} if self.seed is not None else {}
         sampler = optuna.samplers.TPESampler(**sampler_kwargs)
         pruner = optuna.pruners.SuccessiveHalvingPruner(min_resource=1, reduction_factor=2)
         study = optuna.create_study(
+            study_name=self.study_name,
+            storage=STUDY_STORAGE_URI,
+            load_if_exists=True,
             direction="maximize",
             sampler=sampler,
             pruner=pruner,
@@ -275,6 +290,8 @@ class TPEOptimizer:
             "results": list(self.results),
             "best_params": best_params,
             "best_value": best_value,
+            "study_name": self.study_name,
+            "storage": STUDY_STORAGE_URI,
             "study": study,
         }
 
@@ -485,6 +502,41 @@ class TPEOptimizer:
         if not failures:
             return None
         return "; ".join(failures[:3])
+
+    def _resolve_study_name(self, study_name: Optional[str]) -> str:
+        if study_name is not None and str(study_name).strip():
+            candidate = str(study_name).strip()
+        elif self.run_id is not None and str(self.run_id).strip():
+            candidate = str(self.run_id).strip()
+        else:
+            candidate = str(self._fixed_params.get("data") or "automl-study").strip()
+
+        sanitized = "".join(
+            character if character.isalnum() or character in {"-", "_", "."} else "_"
+            for character in candidate
+        ).strip("._")
+        return sanitized or "automl-study"
+
+    def _reset_storage(self) -> None:
+        removed_paths: list[str] = []
+        for candidate in self._storage_files():
+            try:
+                candidate.unlink()
+                removed_paths.append(str(candidate))
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                self._log(f"Failed to remove Optuna storage file {candidate}: {exc}")
+
+        if removed_paths:
+            self._log(
+                "Reset Optuna storage before starting a new HPO cycle: "
+                + ", ".join(removed_paths)
+            )
+
+    def _storage_files(self) -> list[Path]:
+        sidecars = [Path(f"{self.study_db_path}{suffix}") for suffix in STUDY_DB_SIDECARS]
+        return [self.study_db_path, *sidecars]
 
     def _log(self, message: str) -> None:
         if callable(self.log_callback):
