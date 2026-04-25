@@ -14,11 +14,10 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.file_manager import StatusManager
-from app.core.hyperparameter_search import grid_search_params
 from app.core.image_validator import validate_images
 from app.core.label_validator import validate_label_file
 from app.core.orc import AutoMLOrchestrator
-from app.core.random_search_combinations import random_search_params
+from app.core.tpe_optimizer import TPEOptimizer
 from app.core.training_results import read_training_history
 
 try:
@@ -94,6 +93,8 @@ RUN_ID_COUNTER = count(1)
 AVAILABLE_METRICS = ["mAP@50", "mAP@50-95", "F1", "Recall"]
 AVAILABLE_DEVICES = ["auto", "gpu0", "gpu1", "cpu"]
 AVAILABLE_PRIORITIES = ["normal", "high", "low"]
+AVAILABLE_SEARCH_ALGORITHMS = ["OptunaTPE"]
+DEFAULT_SEARCH_ALGORITHM = AVAILABLE_SEARCH_ALGORITHMS[0]
 SUPPORTED_YAML_FILENAMES = ("data.yaml", "data.yml", "dataset.yaml", "dataset.yml")
 COMMON_DATASET_LAYOUTS = (
     ("images/train", "images/val", "images/test"),
@@ -130,6 +131,14 @@ def parse_optional_int(value: Any) -> Optional[int]:
         return None
 
     return int(text)
+
+
+def parse_trial_count(value: Any, default: int = 10) -> int:
+    if value is None or str(value).strip() == "":
+        return default
+
+    parsed = int(str(value).strip())
+    return max(1, parsed)
 
 
 def safe_update_global_status(**updates: Any) -> dict[str, Any]:
@@ -685,10 +694,12 @@ def build_empty_dataset_detail(
         "availableMetrics": deepcopy(AVAILABLE_METRICS),
         "availableDevices": deepcopy(AVAILABLE_DEVICES),
         "availablePriorities": deepcopy(AVAILABLE_PRIORITIES),
+        "availableSearchAlgorithms": deepcopy(AVAILABLE_SEARCH_ALGORITHMS),
         "settings": {
             "targetMetric": "",
             "device": "auto",
             "priority": "normal",
+            "searchAlgorithm": DEFAULT_SEARCH_ALGORITHM,
         },
         "yamlPath": None,
         "yamlContent": None,
@@ -723,8 +734,10 @@ def build_empty_run_detail(
         "finishedAt": None,
         "targetMetric": target_metric,
         "device": device,
-        "searchAlgorithm": search_alg,
+        "searchAlgorithm": normalize_search_algorithm(search_alg),
         "hyperparams": hyperparams or {},
+        "bestParams": {},
+        "trialCount": None,
         "notes": notes,
         "errorMessage": None,
         "artifacts": {
@@ -765,6 +778,13 @@ def normalize_training_device(device: Optional[str]) -> str | int:
         return 1 if runtime_gpu_available() and (torch is None or torch.cuda.device_count() > 1) else "cpu"
 
     return requested
+
+
+def normalize_search_algorithm(search_alg: Optional[str]) -> str:
+    value = str(search_alg or "").strip()
+    if value in AVAILABLE_SEARCH_ALGORITHMS:
+        return value
+    return DEFAULT_SEARCH_ALGORITHM
 
 
 HYPERPARAMETER_NAME_ALIASES = {
@@ -932,6 +952,7 @@ def build_model_entry(result: dict[str, Any]) -> tuple[Optional[dict[str, Any]],
             "batchSize": result.get("config", {}).get("batch"),
             "imageSize": result.get("config", {}).get("imgsz"),
             "learningRate": result.get("config", {}).get("lr0"),
+            "optimizer": result.get("config", {}).get("optimizer"),
             "device": result.get("config", {}).get("device"),
         },
         "artifacts": build_run_artifacts(train_dir),
@@ -1315,21 +1336,25 @@ async def create_run(
         dataset_yaml_path=str(dataset_yaml_path),
         target_metric=payload.get("targetMetric"),
         device=payload.get("device"),
-        search_alg=payload.get("searchAlg"),
+        search_alg=normalize_search_algorithm(payload.get("searchAlg")),
         notes=payload.get("notes"),
         hyperparams=payload.get("hyperparams", {}),
     )
-    random_search_iterations = int(payload.get("randomSearchIterations", 10))
+    try:
+        trial_count = parse_trial_count(payload.get("optunaTrials", payload.get("randomSearchIterations", 10)))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="optunaTrials must be a positive integer") from exc
 
     RUN_DETAILS[run_id] = detail
     refresh_run_summary(run_id)
-    detail["randomSearchIterations"] = random_search_iterations
+    detail["trialCount"] = trial_count
     dataset["lastRunAt"] = detail["startedAt"]
     dataset["status"] = "running"
     if payload.get("targetMetric"):
         dataset["settings"]["targetMetric"] = payload.get("targetMetric")
     if payload.get("device"):
         dataset["settings"]["device"] = payload.get("device")
+    dataset["settings"]["searchAlgorithm"] = detail["searchAlgorithm"]
 
     refresh_dataset_summary(dataset_id)
 
@@ -1356,7 +1381,7 @@ async def create_run(
         run_id=run_id,
         search_alg=detail["searchAlgorithm"],
         hyperparams=detail["hyperparams"],
-        random_search_iterations=random_search_iterations,
+        trial_count=trial_count,
         dataset_yaml_path=str(dataset_yaml_path),
         device=detail["device"],
     )
@@ -1373,50 +1398,54 @@ def run_training_task(
     run_id: str,
     search_alg: Optional[str],
     hyperparams: dict,
-    random_search_iterations: int,
+    trial_count: int,
     dataset_yaml_path: str,
     device: Optional[str] = None,
 ):
     try:
-        append_to_run_log(run_id, "Preparing hyperparameters...")
+        resolved_search_algorithm = normalize_search_algorithm(search_alg)
+        append_to_run_log(run_id, "Preparing Optuna search space...")
         append_to_run_log(run_id, f"Using dataset YAML: {dataset_yaml_path}")
         training_device = normalize_training_device(device)
         normalized_params = normalize_hyperparams_payload(hyperparams)
-        if search_alg == "GridSearch":
-            hyperparams_combinations = grid_search_params(normalized_params)
-        elif search_alg == "RandomSearch":
-            hyperparams_combinations = random_search_params(normalized_params, random_search_iterations)
+        fixed_params = {"data": dataset_yaml_path}
+        if training_device is not None:
+            fixed_params["device"] = training_device
+
+        append_to_run_log(run_id, f"Search algorithm: {resolved_search_algorithm}")
+        append_to_run_log(run_id, f"Planned trials: {trial_count}")
+        if normalized_params:
+            append_to_run_log(run_id, f"User search space keys: {', '.join(sorted(normalized_params.keys()))}")
         else:
-            hyperparams_combinations = [{}]
-
-        if not hyperparams_combinations:
-            hyperparams_combinations = [{}]
-        for combination in hyperparams_combinations:
-            combination["data"] = dataset_yaml_path
-            if training_device is not None and not combination.get("device"):
-                combination["device"] = training_device
-
-        append_to_run_log(run_id, f"Generated {len(hyperparams_combinations)} combinations")
+            append_to_run_log(run_id, "User search space is empty; default Optuna space will be used")
         append_to_run_log(run_id, f"Resolved training device: {training_device}")
 
         if run_id in RUN_DETAILS:
             RUN_DETAILS[run_id]["status"] = "running"
             RUN_DETAILS[run_id]["errorMessage"] = None
+            RUN_DETAILS[run_id]["searchAlgorithm"] = resolved_search_algorithm
+            RUN_DETAILS[run_id]["trialCount"] = trial_count
             refresh_run_summary(run_id)
 
         append_to_run_log(run_id, "Training started...")
-        orchestrator = AutoMLOrchestrator(
+        optimizer = TPEOptimizer(
             run_id=run_id,
             output_root=RUNS_DIR / "detect" / run_id,
             log_callback=lambda message: append_to_run_log(run_id, message),
         )
-        result = orchestrator.run(hyperparams_combinations)
+        optimization_result = optimizer.optimize(
+            search_space=normalized_params,
+            n_trials=trial_count,
+            fixed_params=fixed_params,
+        )
+        result = optimization_result["results"]
         print("Training finished")
 
         completed_results = [item for item in result if item.get("status") == "completed"]
         if run_id in RUN_DETAILS:
             RUN_DETAILS[run_id]["finishedAt"] = now_iso()
             RUN_DETAILS[run_id]["status"] = "finished" if completed_results else "error"
+            RUN_DETAILS[run_id]["bestParams"] = optimization_result.get("best_params") or {}
             hydrate_run_detail_from_results(run_id, result)
             refresh_run_summary(run_id)
 

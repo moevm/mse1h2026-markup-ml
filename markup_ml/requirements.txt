@@ -5,3 +5,4 @@ pyyaml==6.0.2
 python-multipart==0.0.9
 aiofiles==24.1.0
 pytest==8.3.2
+optuna==4.4.0
