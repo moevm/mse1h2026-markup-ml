@@ -455,6 +455,18 @@ def runtime_gpu_available() -> bool:
         return False
 
 
+def parse_n_trials(raw: Any) -> int:
+    if raw is None or raw == "":
+        return 20
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="n_trials must be a positive integer") from None
+    if n < 1:
+        raise HTTPException(status_code=400, detail="n_trials must be greater than 0")
+    return n
+
+
 def normalize_training_device(device: Optional[str]) -> str | int:
     requested = device or os.getenv("AUTOML_DEVICE", "auto")
     normalized = str(requested).strip().lower()
@@ -483,6 +495,7 @@ def run_summary_from_detail(detail: dict[str, Any]) -> dict[str, Any]:
         "bestMap": detail.get("summary", {}).get("bestMap"),
         "device": detail.get("device"),
         "search_alg": detail.get("search_alg"),
+        "n_trials": detail.get("n_trials"),
     }
 
 
@@ -588,7 +601,7 @@ async def get_dataset_yaml(dataset_id: str):
 async def create_dataset(
     displayName: str = Form(...),
     description: str = Form(""),
-    numClasses: Optional[int] = Form(None),
+    numClasses: Optional[str] = Form(None),
     classNames: str = Form(""),
     datasetFile: UploadFile = File(...),
 ):
@@ -600,7 +613,11 @@ async def create_dataset(
     file_path = upload_dir / f"{dataset_id}_{original_name}"
 
     parsed_class_names = normalize_class_names_input(classNames)
-    resolved_num_classes = numClasses if numClasses and numClasses > 0 else None
+    try:
+        parsed_num = parse_optional_int(numClasses)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="numClasses must be a valid integer") from exc
+    resolved_num_classes = parsed_num if parsed_num is not None and parsed_num > 0 else None
     if parsed_class_names and resolved_num_classes is None:
         resolved_num_classes = len(parsed_class_names)
 
@@ -768,10 +785,12 @@ async def create_run(
         hyperparams=payload.get("hyperparams", {}),
     )
     random_search_iterations = int(payload.get("randomSearchIterations", 10))
+    n_trials = parse_n_trials(payload.get("n_trials"))
 
     RUN_DETAILS[run_id] = detail
     refresh_run_summary(run_id)
     detail["randomSearchIterations"] = random_search_iterations
+    detail["n_trials"] = n_trials
     dataset["lastRunAt"] = detail["startedAt"]
     dataset["status"] = "ready"
     if payload.get("targetMetric"):
@@ -796,6 +815,7 @@ async def create_run(
         search_alg=detail["search_alg"],
         hyperparams=detail["hyperparams"],
         random_search_iterations=random_search_iterations,
+        n_trials=n_trials,
         dataset_yaml_path=str(dataset_yaml_path),
         device=detail["device"],
     )
@@ -808,6 +828,7 @@ def run_training_task(
     search_alg: Optional[str],
     hyperparams: dict,
     random_search_iterations: int,
+    n_trials: int,
     dataset_yaml_path: str,
     device: Optional[str] = None,
 ):
@@ -826,7 +847,7 @@ def run_training_task(
         elif search_alg == "RandomSearch":
             hyperparams_combinations = random_search_params(normalized_params, random_search_iterations)
         else:
-            hyperparams_combinations = [{}]
+            hyperparams_combinations = [{} for _ in range(max(1, n_trials))]
 
         if not hyperparams_combinations:
             hyperparams_combinations = [{}]

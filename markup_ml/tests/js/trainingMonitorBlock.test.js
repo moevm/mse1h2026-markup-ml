@@ -47,6 +47,8 @@ function createDatasetsPageFetchMock() {
         bestMap: 0.81,
         availableMetrics: ["map"],
         availableDevices: ["auto", "gpu0", "cpu"],
+        yamlPath: "datasets/ds-1/data.yaml",
+        yamlContent: "train: images/train\nval: images/val\nnc: 1\nnames: [obj]\n",
         settings: {
           targetMetric: "map",
           device: "auto",

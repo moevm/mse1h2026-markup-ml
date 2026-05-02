@@ -129,6 +129,33 @@ function cleanupSideEffects() {
   }
 }
 
+function formatApiErrorDetail(detail) {
+  if (detail == null) return "";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (item == null) return "";
+        if (typeof item === "string") return item;
+        const loc = Array.isArray(item.loc) ? item.loc.filter(Boolean).join(".") : "";
+        const msg = item.msg != null ? String(item.msg) : "";
+        if (loc && msg) return `${loc}: ${msg}`;
+        return msg || JSON.stringify(item);
+      })
+      .filter(Boolean)
+      .join("; ");
+  }
+  if (typeof detail === "object") {
+    if (typeof detail.msg === "string") return detail.msg;
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return String(detail);
+    }
+  }
+  return String(detail);
+}
+
 async function api(path, options = {}) {
   const url = buildApiUrl(path);
   const init = {
@@ -159,12 +186,12 @@ async function api(path, options = {}) {
     let errorMessage = payloadText || `HTTP ${response.status}`;
     try {
       const parsed = JSON.parse(payloadText);
-      if (parsed?.detail) errorMessage = parsed.detail;
+      if (parsed?.detail != null) errorMessage = formatApiErrorDetail(parsed.detail);
     } catch {
       // noop
     }
 
-    throw new Error(errorMessage);
+    throw new Error(errorMessage || `HTTP ${response.status}`);
   }
 
   if (options.asText) {
@@ -889,132 +916,6 @@ function renderDashboardPage() {
 }
 
 
-function addHyperparamRow() {
-  const container = document.getElementById('hyperparamsContainer');
-  const newRow = document.createElement('div');
-  newRow.className = 'hyperparam-row';  
-  const searchAlgSelect = qs("#searchAlg");
-  const isRandomSearch = searchAlgSelect && searchAlgSelect.value === "RandomSearch";
-  
-  newRow.innerHTML = `
-    <input type="text" name="hyperparam_name[]" placeholder="Название" class="hyperparam-name" />
-    ${isRandomSearch ? `
-      <select name="hyperparam_type[]" class="hyperparam-type">
-        <option value="list">Список значений</option>
-        <option value="range">Диапазон (мин макс)</option>
-      </select>
-    ` : '<input type="hidden" name="hyperparam_type[]" value="list" />'}
-    <input type="text" name="hyperparam_values[]" placeholder="Значения" class="hyperparam-values" />
-    <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">✖</button>
-  `;
-  container.appendChild(newRow);
-}
-
-function removeHyperparamRow(button) {
-  const row = button.closest('.hyperparam-row');
-  if (row && document.querySelectorAll('.hyperparam-row').length > 1) {
-    row.remove();
-  } else {
-    showNotice('Должна остаться хотя бы одна строка', 'warning');
-  }
-}
-
-function collectHyperparams() {
-  const names = document.querySelectorAll('input[name="hyperparam_name[]"]');
-  const types = document.querySelectorAll('select[name="hyperparam_type[]"], input[name="hyperparam_type[]"]');
-  const values = document.querySelectorAll('input[name="hyperparam_values[]"]');
-  const hyperparams = {};
-  
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i].value.trim();
-    let type = types[i]?.value || 'list';
-    const valuesStr = values[i].value.trim();
-    
-    if (name && valuesStr) {
-      if (type === 'list') {
-        const valuesArray = valuesStr.split(/\s+/).map(v => {
-          const num = Number(v);
-          return isNaN(num) ? v : num;
-        });
-        hyperparams[name] = {
-          type: 'list',
-          values: valuesArray
-        };
-      } else if (type === 'range') {
-        const parts = valuesStr.split(/\s+/);
-        if (parts.length >= 2) {
-          const min = Number(parts[0]);
-          const max = Number(parts[1]);
-          
-          if (!isNaN(min) && !isNaN(max)) {
-            hyperparams[name] = {
-              type: 'range',
-              min: min,
-              max: max,
-            };
-          }
-        }
-      }
-    }
-  }
-  
-  return hyperparams;
-}
-
-function toggleHyperparamTypes() {
-  const searchAlgSelect = qs("#searchAlg");
-  const isRandomSearch = searchAlgSelect && searchAlgSelect.value === "RandomSearch";
-  
-  // Находим все строки гиперпараметров
-  const hyperparamRows = document.querySelectorAll('.hyperparam-row');
-  
-  hyperparamRows.forEach(row => {
-    const existingTypeSelect = row.querySelector('select[name="hyperparam_type[]"]');
-    const existingHiddenInput = row.querySelector('input[name="hyperparam_type[]"][type="hidden"]');
-    const valuesInput = row.querySelector('input[name="hyperparam_values[]"]');
-    
-    if (isRandomSearch) {
-      if (existingHiddenInput) {
-        const select = document.createElement('select');
-        select.name = 'hyperparam_type[]';
-        select.className = 'hyperparam-type';
-        select.innerHTML = `
-          <option value="list">Список значений</option>
-          <option value="range">Диапазон (мин макс)</option>
-        `;
-        existingHiddenInput.replaceWith(select);
-      } else if (existingTypeSelect) {
-        existingTypeSelect.style.display = 'block';
-      }
-      
-      if (valuesInput) {
-        const typeSelect = row.querySelector('select[name="hyperparam_type[]"]');
-        if (typeSelect) {
-          const currentType = typeSelect.value;
-          valuesInput.placeholder = currentType === 'list' ? 'Значения: 0.001 0.01 0.1' : 'Диапазон: 0.001 0.1';
-          
-          typeSelect.onchange = () => {
-            valuesInput.placeholder = typeSelect.value === 'list' 
-              ? 'Значения: 0.001 0.01 0.1' 
-              : 'Диапазон: 0.001 0.1';
-          };
-        }
-      }
-    } else {
-      if (existingTypeSelect) {
-        const hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'hyperparam_type[]';
-        hiddenInput.value = 'list';
-        existingTypeSelect.replaceWith(hiddenInput);
-      }
-      if (valuesInput) {
-        valuesInput.placeholder = 'Значения: 0.001 0.01 0.1';
-      }
-    }
-  });
-}
-
 async function renderDatasetsPage() {
   setPageMeta("Datasets", "Загрузка датасетов и запуск AutoML");
 
@@ -1213,50 +1114,28 @@ async function renderDatasetsPage() {
                     </div>
 
                     <div class="form-grid">
-
-
                       <div class="form-group">
                         <label for="runNotes">Комментарий</label>
                         <input id="runNotes" name="notes" type="text" placeholder="Необязательно" />
                       </div>
                     </div>
 
-                    <div class="form-group">
-                      <label for="searchAlg">Алгоритм Поиска</label>
-                      <select id="searchAlg" name="searchAlg">
-                        ${optionMarkup(
-                          (datasetDetail.searchAlgorithm?.length
-                            ? datasetDetail.searchAlgorithm
-                            : ["GridSearch", "RandomSearch"]
-                          ).map((value) => ({ value, label: value.toUpperCase() })),
-                          datasetDetail.settings?.searchAlgorithm || "GridSearch"
-                        )}
-                        </select>
-                      </div>
-                      <div class="form-group" id="randomSearchIterationsGroup" style="display: none;">
-                        <label for="randomSearchIterations">Количество комбинаций (RandomSearch)</label>
-                        <input type="number" id="randomSearchIterations" name="randomSearchIterations" min="1" max="1000" value="10" step="1"
-                          class="form-control"
+                    <div class="form-group" style="margin-top:8px;">
+                      <h3 class="card-title" style="font-size:18px; margin:0 0 12px;">Настройки подбора</h3>
+                      <div class="form-group" style="margin-bottom:0;">
+                        <label for="n_trials">Количество попыток (n_trials)</label>
+                        <input
+                          type="number"
+                          id="n_trials"
+                          name="n_trials"
+                          min="1"
+                          step="1"
+                          value="20"
+                          required
                         />
-                        <small class="form-text text-muted">Количество случайных комбинаций гиперпараметров (1-1000)</small>
+                        <small class="form-text text-muted">Совокупное число конфигураций (целое число &gt; 0), которые будут протестированы (TPE).</small>
                       </div>
-
-                      <div class="form-group">
-                        <label>Гиперпараметры</label>
-                        <div id="hyperparamsContainer">
-                          <div class="hyperparam-row">
-                            <input type="text" name="hyperparam_name[]" placeholder="Название" class="hyperparam-name" />
-                            <!-- select будет заменен на hidden в зависимости от алгоритма -->
-                            <select name="hyperparam_type[]" class="hyperparam-type">
-                              <option value="list">Список значений</option>
-                              <option value="range">Диапазон (мин макс)</option>
-                            </select>
-                            <input type="text" name="hyperparam_values[]" placeholder="Значения: 0.001 0.01 0.1" class="hyperparam-values" />
-                            <button type="button" class="btn-remove-param" onclick="removeHyperparamRow(this)">✖</button>
-                          </div>
-                        </div>
-                        <button type="button" id="addHyperparamBtn" class="btn-add-param">+ Добавить гиперпараметр</button>
-                      </div>
+                    </div>
                     <div class="form-actions">
                       <button class="btn btn-primary" type="submit" ${yamlReady ? "" : "disabled"}>
                         Запустить AutoML
@@ -1423,16 +1302,19 @@ async function renderDatasetsPage() {
 
     const payload = serializeForm(form);
 
-    const hyperparams = collectHyperparams();
-    if (Object.keys(hyperparams).length > 0) {
-      payload.hyperparams = hyperparams;
-      appendTrainingMonitorLog(trainingMonitorLine(`Добавлено ${Object.keys(hyperparams).length} гиперпараметров`));
+    const nTrialsRaw = payload.n_trials;
+    const nTrials = Number(nTrialsRaw);
+    if (
+      nTrialsRaw === "" ||
+      nTrialsRaw === undefined ||
+      !Number.isFinite(nTrials) ||
+      !Number.isInteger(nTrials) ||
+      nTrials < 1
+    ) {
+      throw new Error("Укажите целое число попыток n_trials больше 0.");
     }
-    if (payload.searchAlg === "RandomSearch") {
-      const iterations = payload.randomSearchIterations || 10;
-      payload.randomSearchIterations = iterations;
-      appendTrainingMonitorLog(trainingMonitorLine(`RandomSearch: будет сгенерировано ${iterations} комбинаций`));
-    }
+    payload.n_trials = nTrials;
+    appendTrainingMonitorLog(trainingMonitorLine(`Бюджет попыток (n_trials): ${nTrials}`));
     appendTrainingMonitorLog(trainingMonitorLine("Отправка запроса на запуск обучения"));
 
     const response = await api(`/datasets/${state.activeDatasetId}/runs`, {
@@ -1483,30 +1365,6 @@ async function renderDatasetsPage() {
   window.location.hash = `#runs/${row.dataset.runId}`;
   });
 
-  const searchAlgSelect = qs("#searchAlg");
-  const iterationsGroup = qs("#randomSearchIterationsGroup");
-
-  function toggleIterationsField() {
-    if (searchAlgSelect && iterationsGroup) {
-      const isRandomSearch = searchAlgSelect.value === "RandomSearch";
-      iterationsGroup.style.display = isRandomSearch ? "block" : "none";
-      toggleHyperparamTypes();
-    }
-  }
-
-  if (searchAlgSelect) {
-    searchAlgSelect.addEventListener("change", toggleIterationsField);
-    toggleIterationsField(); 
-  }
-
-  const addBtn = qs("#addHyperparamBtn");
-  if (addBtn) {
-    addBtn.removeEventListener("click", addHyperparamRow);
-    addBtn.addEventListener("click", () => {
-      addHyperparamRow();
-      toggleHyperparamTypes();
-    });
-  }
 }
 
 function renderRunsPage() {
@@ -1570,7 +1428,7 @@ function renderRunsPage() {
                       <th>Best model</th>
                       <th>mAP</th>
                       <th>Device</th>
-                      <th>Search Algorithm</th>
+                      <th>n_trials</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1593,7 +1451,7 @@ function renderRunsPage() {
                             <td>${escapeHtml(run.bestModel || "—")}</td>
                             <td>${metricValue(run.bestMap, 2)}</td>
                             <td>${escapeHtml(run.device || run.gpu || "—")}</td>
-                            <td>${escapeHtml(run.searchAlgorithm || "—")}</td>
+                            <td>${run.n_trials != null ? escapeHtml(String(run.n_trials)) : escapeHtml(run.searchAlgorithm || "—")}</td>
                           </tr>
                         `
                       )
@@ -1670,7 +1528,8 @@ function renderRunOverview(detail) {
                 <tr><th>Finished</th><td>${escapeHtml(formatDateTime(detail.finishedAt))}</td></tr>
                 <tr><th>Metric</th><td>${escapeHtml(detail.targetMetric || "—")}</td></tr>
                 <tr><th>Device</th><td>${escapeHtml(detail.device || detail.gpu || "—")}</td></tr>
-                <tr><th>Search Algorithm</th><td>${escapeHtml(detail.searchAlgorithm || "—")}</td></tr>
+                <tr><th>Количество попыток (n_trials)</th><td>${detail.n_trials != null ? escapeHtml(String(detail.n_trials)) : "—"}</td></tr>
+                <tr><th>Search Algorithm</th><td>${escapeHtml(detail.searchAlgorithm || detail.search_alg || "—")}</td></tr>
               </tbody>
             </table>
           </div>
