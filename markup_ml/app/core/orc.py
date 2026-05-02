@@ -1,8 +1,10 @@
 #Task 2.3.1
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 from pathlib import Path
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from ultralytics import YOLO
 
 from app.core.file_manager import StatusManager
@@ -83,9 +85,11 @@ class AutoMLOrchestrator:
 
         return result
 
-    def run(self, config_list: List[Dict[str, Any]]):
+    def run(self, config_list: List[Dict[str, Any]], max_concurrent_trials: int = 1):
         self.total_trials = len(config_list)
-        results = []
+        results: List[Any] = [None] * self.total_trials
+        max_workers = max(1, min(int(max_concurrent_trials), max(1, self.total_trials)))
+
         self.status_manager.update_status(
             current_model=0,
             total_models=self.total_trials,
@@ -93,12 +97,30 @@ class AutoMLOrchestrator:
             current_config=None
         )
 
-        for i, config in enumerate(config_list):
-            result = self.run_single_trial(config, i)
-            results.append(result)
+        if self.total_trials == 0:
+            best_result = self._find_best_result([])
+            self.status_manager.update_status(
+                current_model=0,
+                total_models=0,
+                status="completed",
+                best_result=best_result
+            )
+            return []
 
-            if i < len(config_list) - 1:
-                time.sleep(2)
+        if max_workers == 1:
+            for i, config in enumerate(config_list):
+                results[i] = self.run_single_trial(config, i)
+                if i < len(config_list) - 1:
+                    time.sleep(2)
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_idx = {
+                    executor.submit(self.run_single_trial, config_list[i], i): i
+                    for i in range(len(config_list))
+                }
+                for future in as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    results[idx] = future.result()
 
         best_result = self._find_best_result(results)
         self.status_manager.update_status(
@@ -135,9 +157,13 @@ class AutoMLOrchestrator:
         return best
 
 
-def run_automl(config_list: List[Dict[str, Any]], base_model: str = "yolov8n.pt"):
+def run_automl(
+    config_list: List[Dict[str, Any]],
+    base_model: str = "yolov8n.pt",
+    max_concurrent_trials: int = 1,
+):
     orchestrator = AutoMLOrchestrator(base_model)
-    return orchestrator.run(config_list)
+    return orchestrator.run(config_list, max_concurrent_trials=max_concurrent_trials)
 
 
 #пример работы

@@ -455,6 +455,39 @@ def runtime_gpu_available() -> bool:
         return False
 
 
+<<<<<<< Updated upstream
+=======
+def parse_n_trials(raw: Any) -> int:
+    if raw is None or raw == "":
+        return 20
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="n_trials must be a positive integer") from None
+    if n < 1:
+        raise HTTPException(status_code=400, detail="n_trials must be greater than 0")
+    return n
+
+
+def parse_max_concurrent_trials(raw: Any) -> int:
+    if raw is None or raw == "":
+        return 1
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="max_concurrent_trials must be a positive integer",
+        ) from None
+    if n < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="max_concurrent_trials must be at least 1",
+        )
+    return n
+
+
+>>>>>>> Stashed changes
 def normalize_training_device(device: Optional[str]) -> str | int:
     requested = device or os.getenv("AUTOML_DEVICE", "auto")
     normalized = str(requested).strip().lower()
@@ -483,6 +516,11 @@ def run_summary_from_detail(detail: dict[str, Any]) -> dict[str, Any]:
         "bestMap": detail.get("summary", {}).get("bestMap"),
         "device": detail.get("device"),
         "search_alg": detail.get("search_alg"),
+<<<<<<< Updated upstream
+=======
+        "n_trials": detail.get("n_trials"),
+        "max_concurrent_trials": detail.get("max_concurrent_trials"),
+>>>>>>> Stashed changes
     }
 
 
@@ -768,10 +806,20 @@ async def create_run(
         hyperparams=payload.get("hyperparams", {}),
     )
     random_search_iterations = int(payload.get("randomSearchIterations", 10))
+<<<<<<< Updated upstream
+=======
+    n_trials = parse_n_trials(payload.get("n_trials"))
+    max_concurrent_trials = parse_max_concurrent_trials(payload.get("max_concurrent_trials"))
+>>>>>>> Stashed changes
 
     RUN_DETAILS[run_id] = detail
     refresh_run_summary(run_id)
     detail["randomSearchIterations"] = random_search_iterations
+<<<<<<< Updated upstream
+=======
+    detail["n_trials"] = n_trials
+    detail["max_concurrent_trials"] = max_concurrent_trials
+>>>>>>> Stashed changes
     dataset["lastRunAt"] = detail["startedAt"]
     dataset["status"] = "ready"
     if payload.get("targetMetric"):
@@ -796,6 +844,11 @@ async def create_run(
         search_alg=detail["search_alg"],
         hyperparams=detail["hyperparams"],
         random_search_iterations=random_search_iterations,
+<<<<<<< Updated upstream
+=======
+        n_trials=n_trials,
+        max_concurrent_trials=max_concurrent_trials,
+>>>>>>> Stashed changes
         dataset_yaml_path=str(dataset_yaml_path),
         device=detail["device"],
     )
@@ -808,6 +861,11 @@ def run_training_task(
     search_alg: Optional[str],
     hyperparams: dict,
     random_search_iterations: int,
+<<<<<<< Updated upstream
+=======
+    n_trials: int,
+    max_concurrent_trials: int,
+>>>>>>> Stashed changes
     dataset_yaml_path: str,
     device: Optional[str] = None,
 ):
@@ -837,6 +895,10 @@ def run_training_task(
 
         append_to_run_log(run_id, f"Generated {len(hyperparams_combinations)} combinations")
         append_to_run_log(run_id, f"Resolved training device: {training_device}")
+        append_to_run_log(
+            run_id,
+            f"Max concurrent trials: {max(1, int(max_concurrent_trials))}",
+        )
 
         if run_id in RUN_DETAILS:
             RUN_DETAILS[run_id]["status"] = "running"
@@ -844,7 +906,10 @@ def run_training_task(
 
         append_to_run_log(run_id, "Training started...")
         orchestrator = AutoMLOrchestrator()
-        result = orchestrator.run(hyperparams_combinations)
+        result = orchestrator.run(
+            hyperparams_combinations,
+            max_concurrent_trials=max_concurrent_trials,
+        )
         print("Training finished")
 
         if run_id in RUN_DETAILS:

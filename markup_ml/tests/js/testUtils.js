@@ -356,6 +356,11 @@ function createApiMock() {
       const newRunId = `run-${state.nextRunIndex++}`;
       const dataset = state.datasetDetails[datasetId];
 
+<<<<<<< Updated upstream
+=======
+      const trialBudget = payload.n_trials ?? payload.budget;
+      const maxConcurrent = payload.max_concurrent_trials ?? 1;
+>>>>>>> Stashed changes
       const detail = {
         id: newRunId,
         datasetId,
@@ -364,7 +369,13 @@ function createApiMock() {
         startedAt: "2026-03-12T10:00:00Z",
         finishedAt: null,
         targetMetric: payload.targetMetric,
+<<<<<<< Updated upstream
         budget: payload.budget,
+=======
+        budget: trialBudget,
+        n_trials: trialBudget,
+        max_concurrent_trials: maxConcurrent,
+>>>>>>> Stashed changes
         device: payload.device,
         notes: payload.notes,
         summary: {
@@ -387,7 +398,13 @@ function createApiMock() {
         finishedAt: null,
         bestModel: null,
         bestMap: null,
+<<<<<<< Updated upstream
         budget: payload.budget,
+=======
+        budget: trialBudget,
+        n_trials: trialBudget,
+        max_concurrent_trials: maxConcurrent,
+>>>>>>> Stashed changes
         device: payload.device,
       });
 
