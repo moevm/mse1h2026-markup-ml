@@ -905,3 +905,35 @@ textarea:focus {
 .chart-card .artifact-download-btn {
   margin-top: 10px;
 }
+
+.label-with-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-hint-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: help;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.field-hint-icon:hover,
+.field-hint-icon:focus-visible {
+  background: var(--primary-soft);
+  color: var(--primary);
+  outline: none;
+}

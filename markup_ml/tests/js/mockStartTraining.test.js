@@ -195,6 +195,11 @@ function createApiMock() {
     if (normalizedUrl === "/api/datasets/ds-1/runs" && method === "POST") {
       const payload = JSON.parse(options.body);
       const newRunId = "run-2";
+<<<<<<< Updated upstream
+=======
+      const trialBudget = payload.n_trials ?? payload.budget;
+      const maxConcurrent = payload.max_concurrent_trials ?? 1;
+>>>>>>> Stashed changes
 
       runs.unshift({
         id: newRunId,
@@ -205,7 +210,13 @@ function createApiMock() {
         finishedAt: null,
         bestModel: null,
         bestMap: null,
+<<<<<<< Updated upstream
         budget: payload.budget,
+=======
+        budget: trialBudget,
+        n_trials: trialBudget,
+        max_concurrent_trials: maxConcurrent,
+>>>>>>> Stashed changes
         device: payload.device,
       });
 
@@ -217,7 +228,13 @@ function createApiMock() {
         startedAt: "2026-03-12T10:00:00Z",
         finishedAt: null,
         targetMetric: payload.targetMetric,
+<<<<<<< Updated upstream
         budget: payload.budget,
+=======
+        budget: trialBudget,
+        n_trials: trialBudget,
+        max_concurrent_trials: maxConcurrent,
+>>>>>>> Stashed changes
         device: payload.device,
         summary: {
           bestModel: null,
