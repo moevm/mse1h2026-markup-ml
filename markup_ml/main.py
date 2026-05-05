@@ -264,6 +264,108 @@ def apply_yaml_metadata_from_file(detail: dict[str, Any], yaml_path: Path) -> No
     set_dataset_yaml_info(detail, yaml_path.resolve())
 
 
+def validate_uploaded_yaml_text(yaml_text: str) -> dict[str, Any]:
+    yaml_runtime = require_yaml_module()
+
+    try:
+        payload = yaml_runtime.safe_load(yaml_text)
+    except YAML_EXCEPTIONS as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="YAML must contain a mapping object")
+
+    required_keys = ("train", "val", "nc")
+    missing_keys = [key for key in required_keys if key not in payload]
+    if missing_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"YAML is missing required keys: {', '.join(missing_keys)}",
+        )
+
+    class_count = parse_optional_int(payload.get("nc"))
+    if class_count is None or class_count <= 0:
+        raise HTTPException(status_code=400, detail="YAML key 'nc' must be a positive integer")
+
+<<<<<<< Updated upstream
+=======
+    if "names" in payload:
+        class_names = normalize_yaml_names(payload.get("names"))
+        if len(class_names) != class_count:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "YAML keys 'nc' and 'names' are inconsistent: "
+                    f"nc={class_count}, names={len(class_names)}"
+                ),
+            )
+
+>>>>>>> Stashed changes
+    payload["nc"] = class_count
+    return payload
+
+
+def save_yaml_to_dataset(detail: dict[str, Any], yaml_text: str, payload: dict[str, Any]) -> Path:
+    dataset_root_value = detail.get("datasetRoot")
+    if not dataset_root_value:
+        raise HTTPException(status_code=400, detail="Dataset root is not configured")
+
+    yaml_runtime = require_yaml_module()
+    dataset_root = Path(str(dataset_root_value)).resolve()
+    dataset_root.mkdir(parents=True, exist_ok=True)
+
+    normalized_payload = dict(payload)
+    normalized_payload["path"] = str(dataset_root)
+    normalized_payload["nc"] = int(payload["nc"])
+
+    yaml_path = (dataset_root / "data.yaml").resolve()
+    with yaml_path.open("w", encoding="utf-8") as file:
+        yaml_runtime.safe_dump(
+            normalized_payload,
+            file,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        )
+
+    detail["yamlError"] = None
+    detail["trainFolder"] = str(normalized_payload.get("train")) if normalized_payload.get("train") else None
+    detail["valFolder"] = str(normalized_payload.get("val")) if normalized_payload.get("val") else None
+    detail["testFolder"] = str(normalized_payload.get("test")) if normalized_payload.get("test") else None
+    detail["classesCount"] = int(normalized_payload["nc"])
+
+    class_names = normalize_yaml_names(normalized_payload.get("names"))
+    if class_names:
+        detail["classes"] = class_names
+
+    set_dataset_yaml_info(detail, yaml_path)
+    refresh_dataset_summary(detail["id"])
+
+    return yaml_path
+
+
+def validate_yaml_dataset_paths(dataset_root: Path, payload: dict[str, Any]) -> None:
+    missing_paths: list[str] = []
+
+    train_value = str(payload.get("train") or "").strip()
+    val_value = str(payload.get("val") or "").strip()
+
+    if not train_value or not folder_exists(dataset_root, train_value):
+        missing_paths.append(f"train={train_value or '<empty>'}")
+    if not val_value or not folder_exists(dataset_root, val_value):
+        missing_paths.append(f"val={val_value or '<empty>'}")
+
+    if missing_paths:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "YAML paths do not match dataset structure. "
+                f"Missing: {', '.join(missing_paths)}. "
+                f"Dataset root: {dataset_root}"
+            ),
+        )
+
+
 def sync_dataset_yaml(detail: dict[str, Any], force_generate: bool = False) -> Path:
     existing_yaml_path = detail.get("yamlPath")
     if existing_yaml_path and not force_generate:
@@ -584,6 +686,37 @@ async def get_dataset_yaml(dataset_id: str):
     return PlainTextResponse(detail["yamlContent"], media_type="text/yaml")
 
 
+@app.post("/api/upload-yaml")
+async def upload_yaml(
+    datasetId: str = Form(...),
+    yamlFile: UploadFile = File(...),
+):
+    detail = get_dataset_or_404(datasetId)
+
+    filename = (yamlFile.filename or "").lower()
+    if filename and not filename.endswith((".yaml", ".yml")):
+        raise HTTPException(status_code=400, detail="Only .yaml or .yml files are supported")
+
+    raw_content = await yamlFile.read()
+    if not raw_content:
+        raise HTTPException(status_code=400, detail="Uploaded YAML file is empty")
+
+    try:
+        yaml_text = raw_content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="YAML file must be UTF-8 encoded") from exc
+
+    payload = validate_uploaded_yaml_text(yaml_text)
+    dataset_root = Path(str(detail.get("datasetRoot") or "")).resolve()
+    validate_yaml_dataset_paths(dataset_root, payload)
+    saved_path = save_yaml_to_dataset(detail, yaml_text, payload)
+
+    return {
+        "status": "ok",
+        "path": str(saved_path),
+    }
+
+
 @app.post("/api/datasets")
 async def create_dataset(
     displayName: str = Form(...),
@@ -616,6 +749,20 @@ async def create_dataset(
             detail="classNames count must match numClasses",
         )
 
+    uploaded_yaml_text: Optional[str] = None
+    uploaded_yaml_payload: Optional[dict[str, Any]] = None
+    if generateYaml != "true" and yamlFile is not None:
+        raw_uploaded_yaml = await yamlFile.read()
+        if not raw_uploaded_yaml:
+            raise HTTPException(status_code=400, detail="Uploaded YAML file is empty")
+
+        try:
+            uploaded_yaml_text = raw_uploaded_yaml.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=400, detail="YAML file must be UTF-8 encoded") from exc
+
+        uploaded_yaml_payload = validate_uploaded_yaml_text(uploaded_yaml_text)
+
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(datasetFile.file, buffer)
 
@@ -636,6 +783,8 @@ async def create_dataset(
     try:
         if suffix == ".zip":
             extract_dir = upload_dir / f"{dataset_id}_extracted"
+            if extract_dir.exists():
+                shutil.rmtree(extract_dir)
             with zipfile.ZipFile(file_path, "r") as zip_ref:
                 zip_ref.extractall(extract_dir)
 
@@ -647,18 +796,25 @@ async def create_dataset(
             detail["valFolder"] = val_folder
             detail["testFolder"] = test_folder
 
-            existing_yaml = find_existing_yaml_file(dataset_root)
-            if existing_yaml:
-                apply_yaml_metadata_from_file(detail, existing_yaml)
-                sync_dataset_yaml(detail, force_generate=True)
-            elif resolved_num_classes is not None:
-                sync_dataset_yaml(detail, force_generate=True)
+            if uploaded_yaml_text is not None and uploaded_yaml_payload is not None:
+                validate_yaml_dataset_paths(dataset_root, uploaded_yaml_payload)
+                save_yaml_to_dataset(detail, uploaded_yaml_text, uploaded_yaml_payload)
+            else:
+                existing_yaml = find_existing_yaml_file(dataset_root)
+                if existing_yaml:
+                    apply_yaml_metadata_from_file(detail, existing_yaml)
+                    sync_dataset_yaml(detail, force_generate=True)
+                elif resolved_num_classes is not None:
+                    sync_dataset_yaml(detail, force_generate=True)
 
         elif suffix in {".yaml", ".yml"}:
             apply_yaml_metadata_from_file(detail, file_path)
 
         else:
             detail["datasetRoot"] = str(file_path.parent.resolve())
+
+            if uploaded_yaml_text is not None and uploaded_yaml_payload is not None:
+                save_yaml_to_dataset(detail, uploaded_yaml_text, uploaded_yaml_payload)
 
     except DATASET_CONFIGURATION_EXCEPTIONS as exc:
         raise HTTPException(status_code=400, detail=f"Failed to configure dataset: {exc}") from exc
@@ -748,7 +904,7 @@ async def create_run(
     dataset = get_dataset_or_404(dataset_id)
 
     try:
-        dataset_yaml_path = str(sync_dataset_yaml(dataset, force_generate=True))
+        dataset_yaml_path = str(sync_dataset_yaml(dataset))
     except DATASET_CONFIGURATION_EXCEPTIONS as exc:
         raise HTTPException(status_code=400, detail=f"Dataset YAML is invalid: {exc}") from exc
 
