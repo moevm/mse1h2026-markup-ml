@@ -99,6 +99,8 @@ function createApiMock() {
         device: "auto",
         priority: "normal",
       },
+      yamlPath: "datasets/ds-1/data.yaml",
+      yamlContent: "train: images/train\nval: images/val\nnc: 1\nnames: [obj]\n",
       bestModels: [],
     },
   };
@@ -195,6 +197,7 @@ function createApiMock() {
     if (normalizedUrl === "/api/datasets/ds-1/runs" && method === "POST") {
       const payload = JSON.parse(options.body);
       const newRunId = "run-2";
+      const trialBudget = payload.n_trials ?? payload.budget;
 
       runs.unshift({
         id: newRunId,
@@ -205,7 +208,8 @@ function createApiMock() {
         finishedAt: null,
         bestModel: null,
         bestMap: null,
-        budget: payload.budget,
+        budget: trialBudget,
+        n_trials: trialBudget,
         device: payload.device,
       });
 
@@ -217,7 +221,8 @@ function createApiMock() {
         startedAt: "2026-03-12T10:00:00Z",
         finishedAt: null,
         targetMetric: payload.targetMetric,
-        budget: payload.budget,
+        budget: trialBudget,
+        n_trials: trialBudget,
         device: payload.device,
         summary: {
           bestModel: null,

@@ -356,6 +356,7 @@ function createApiMock() {
       const newRunId = `run-${state.nextRunIndex++}`;
       const dataset = state.datasetDetails[datasetId];
 
+      const trialBudget = payload.n_trials ?? payload.budget;
       const detail = {
         id: newRunId,
         datasetId,
@@ -364,7 +365,8 @@ function createApiMock() {
         startedAt: "2026-03-12T10:00:00Z",
         finishedAt: null,
         targetMetric: payload.targetMetric,
-        budget: payload.budget,
+        budget: trialBudget,
+        n_trials: trialBudget,
         device: payload.device,
         notes: payload.notes,
         summary: {
@@ -387,7 +389,8 @@ function createApiMock() {
         finishedAt: null,
         bestModel: null,
         bestMap: null,
-        budget: payload.budget,
+        budget: trialBudget,
+        n_trials: trialBudget,
         device: payload.device,
       });
 
