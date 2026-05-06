@@ -1775,6 +1775,12 @@ async def create_run(
             status_code=400,
             detail="randomSearchIterations/optunaTrials must be a positive integer",
         ) from exc
+    
+    try:
+        max_concurrent = int(payload.get("maxConcurrentTrials", 1))
+        max_concurrent = max(1, max_concurrent)
+    except ValueError:
+        max_concurrent = 1
 
     RUN_DETAILS[run_id] = detail
     refresh_run_summary(run_id)
@@ -1820,6 +1826,7 @@ async def create_run(
         trial_count=trial_count,
         dataset_yaml_path=str(dataset_yaml_path),
         device=detail["device"],
+        max_concurrent_trials=max_concurrent,
     )
 
     return {
@@ -1837,6 +1844,7 @@ def run_training_task(
         trial_count: int,
         dataset_yaml_path: str,
         device: Optional[str] = None,
+        max_concurrent_trials: int = 1,
 ):
     try:
         resolved_search_algorithm = normalize_search_algorithm(search_alg)
@@ -1866,6 +1874,7 @@ def run_training_task(
 
         if resolved_search_algorithm == "OptunaTPE":
             append_to_run_log(run_id, f"Planned trials: {trial_count}")
+            append_to_run_log(run_id, f"Max concurrent trials: {max_concurrent_trials}")
             if not normalized_params:
                 append_to_run_log(run_id, "Default Optuna space will be used")
 
@@ -1881,6 +1890,7 @@ def run_training_task(
                 fixed_params=fixed_params,
                 study_name=run_id,
                 reset_storage=False,
+                max_concurrent_trials=max_concurrent_trials,
             )
             result = optimization_result["results"]
         else:
