@@ -223,6 +223,7 @@ class TPEOptimizer:
         fixed_params: Optional[dict[str, Any]] = None,
         study_name: Optional[str] = None,
         reset_storage: bool = False,
+        max_concurrent_trials: int = 1,
     ) -> dict[str, Any]:
         self._ensure_optuna_available()
 
@@ -262,7 +263,12 @@ class TPEOptimizer:
         )
         self._log(f"Optuna TPE optimization started with {self.total_trials} trial(s)")
 
-        study.optimize(self.objective, n_trials=self.total_trials, catch=(Exception,))
+        study.optimize(
+            self.objective,
+            n_trials=self.total_trials,
+            n_jobs=max_concurrent_trials,
+            catch=(Exception,)
+        )
 
         completed = [item for item in self.results if item.get("status") == "completed"]
         status = "completed" if completed else "error"
@@ -356,16 +362,29 @@ class TPEOptimizer:
         except optuna.exceptions.TrialPruned:
             raise
         except Exception as exc:
+            error_str = str(exc)
+            is_oom = "CUDA out of memory" in error_str or "cuDNN error" in error_str
             result = self._build_result(
                 trial_index=trial_index,
                 config=config,
-                status="failed",
+                status="failed" if not is_oom else "oom",
                 train_dir=train_dir,
                 metrics=self._read_metrics(train_dir) if train_dir else None,
-                error=str(exc),
+                error=error_str,
             )
             self.results.append(result)
-            self._log(f"Trial {trial_index + 1} failed: {exc}")
+            self._log(f"Trial {trial_index + 1} failed: {error_str}")
+
+            if is_oom:
+                self._log(f"Trial {trial_index + 1} stopped due to Out of Memory. Clearing cache and assigning score 0.0.")
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except ImportError:
+                    pass
+                return 0.0
+            
             raise
 
     def _prepare_search_space(self, search_space: Optional[dict[str, Any]]) -> dict[str, Any]:
