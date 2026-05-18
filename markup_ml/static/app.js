@@ -71,6 +71,7 @@ function formatDateTime(value) {
 }
 
 function formatNumber(value, digits = 2) {
+  if (value === null || value === undefined || value === "") return "—";
   const num = Number(value);
   if (Number.isNaN(num)) return "—";
   return num.toFixed(digits);
@@ -649,10 +650,32 @@ function trainingMonitorLine(message) {
 }
 
 function bestCellClass(values, current, lowerIsBetter = false) {
-  const numeric = values.map(Number).filter((v) => !Number.isNaN(v));
+  if (current === null || current === undefined || current === "") return "";
+  const numeric = values
+    .filter((value) => value !== null && value !== undefined && value !== "")
+    .map(Number)
+    .filter((v) => !Number.isNaN(v));
   if (!numeric.length || Number.isNaN(Number(current))) return "";
   const best = lowerIsBetter ? Math.min(...numeric) : Math.max(...numeric);
   return Number(current) === best ? "best-cell" : "";
+}
+
+function compareMetricValue(value, digits = 2) {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "—";
+
+  const abs = Math.abs(num);
+  if (abs > 0 && abs < 0.001) return num.toFixed(5);
+  if (abs > 0 && abs < 0.01) return num.toFixed(4);
+  return num.toFixed(digits);
+}
+
+function compareIntegerValue(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "—";
+  return num.toFixed(0);
 }
 
 function getModelMetric(model, key) {
@@ -3075,6 +3098,277 @@ function renderRunLogs() {
       </div>
     </section>
   `;
+}
+
+
+function formatNumber(value, digits = 2) {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "—";
+
+  const abs = Math.abs(num);
+  if (abs > 0 && abs < 0.001) return num.toFixed(Math.max(digits, 5));
+  if (abs > 0 && abs < 0.01) return num.toFixed(Math.max(digits, 4));
+  return num.toFixed(digits);
+}
+
+function metricValue(value, digits = 2) {
+  return formatNumber(value, digits);
+}
+
+async function renderComparePage() {
+  setPageMeta("Compare", "Сравнение запусков по одному датасету");
+
+  const datasetId = state.compareDatasetId || state.activeDatasetId || state.datasets[0]?.id || null;
+  state.compareDatasetId = datasetId;
+
+  const datasetRuns = datasetId ? getRunsByDataset(datasetId) : [];
+  if (!state.compareRunIds.length && datasetRuns.length) {
+    state.compareRunIds = datasetRuns.slice(0, 2).map((run) => run.id);
+  }
+
+  const selectedRunIds = state.compareRunIds.filter((id) =>
+    datasetRuns.some((run) => String(run.id) === String(id))
+  );
+
+  const details = await Promise.all(selectedRunIds.map((id) => ensureRunDetail(id)));
+  const compareItems = details
+    .filter(Boolean)
+    .map((detail) => {
+      const bestModel =
+        detail.models?.find((model) => model.name === detail.summary?.bestModel) ||
+        detail.models?.[0] ||
+        null;
+
+      return {
+        detail,
+        bestModel,
+      };
+    });
+
+  const mapValues = compareItems.map((item) => getModelMetric(item.bestModel, "map"));
+  const precisionValues = compareItems.map((item) => item.bestModel?.precision);
+  const recallValues = compareItems.map((item) => item.bestModel?.recall);
+  const fpsValues = compareItems.map((item) => item.bestModel?.fps);
+  const sizeValues = compareItems.map((item) => item.bestModel?.sizeMb);
+
+  renderRoot(`
+    <div class="compare-layout">
+      <aside class="compare-sidebar">
+        <div class="form-group" style="margin-bottom:14px;">
+          <label for="compareDatasetSelect">Датасет</label>
+          <select id="compareDatasetSelect">
+            ${state.datasets
+              .map(
+                (dataset) =>
+                  `<option value="${escapeHtml(dataset.id)}" ${
+                    String(dataset.id) === String(datasetId) ? "selected" : ""
+                  }>${escapeHtml(dataset.name)}</option>`
+              )
+              .join("")}
+          </select>
+        </div>
+
+        <div class="helper-text" style="margin-bottom:12px;">Выберите несколько запусков.</div>
+
+        <div class="compare-run-list" id="compareRunList">
+          ${
+            datasetRuns.length
+              ? datasetRuns
+                  .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
+                  .map(
+                    (run) => `
+                      <div class="compare-run-item">
+                        <label>
+                          <input
+                            type="checkbox"
+                            value="${escapeHtml(run.id)}"
+                            ${selectedRunIds.includes(run.id) ? "checked" : ""}
+                          />
+                          <span>
+                            <strong>Run #${escapeHtml(run.id)}</strong>
+                            <div class="compare-run-meta">
+                              ${escapeHtml(formatDateTime(run.startedAt))}<br />
+                              ${escapeHtml(run.bestModel || "—")} · ${compareMetricValue(run.bestMap, 2)} · ${escapeHtml(
+                                run.device || run.gpu || "—"
+                              )}
+                            </div>
+                          </span>
+                        </label>
+                      </div>
+                    `
+                  )
+                  .join("")
+              : `<div class="empty-state">Для этого датасета пока нет запусков</div>`
+          }
+        </div>
+      </aside>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Сравнение запусков</h2>
+            <p class="card-subtitle">Качество, скорость и итоговые параметры</p>
+          </div>
+        </div>
+
+        ${
+          compareItems.length >= 2
+            ? `
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Параметр</th>
+                      ${compareItems
+                        .map((item) => `<th>Run #${escapeHtml(item.detail.id)}</th>`)
+                        .join("")}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Status</strong></td>
+                      ${compareItems.map((item) => `<td>${renderStatus(item.detail.status)}</td>`).join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Best model</strong></td>
+                      ${compareItems
+                        .map((item) => `<td>${escapeHtml(item.bestModel?.name || "—")}</td>`)
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>mAP</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) => `<td class="${bestCellClass(
+                            mapValues,
+                            getModelMetric(item.bestModel, "map")
+                          )}">${compareMetricValue(getModelMetric(item.bestModel, "map"), 2)}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Precision</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) => `<td class="${bestCellClass(
+                            precisionValues,
+                            item.bestModel?.precision
+                          )}">${compareMetricValue(item.bestModel?.precision, 2)}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Recall</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) => `<td class="${bestCellClass(
+                            recallValues,
+                            item.bestModel?.recall
+                          )}">${compareMetricValue(item.bestModel?.recall, 2)}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>FPS</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) => `<td class="${bestCellClass(
+                            fpsValues,
+                            item.bestModel?.fps
+                          )}">${compareIntegerValue(item.bestModel?.fps)}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Size MB</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) => `<td class="${bestCellClass(
+                            sizeValues,
+                            item.bestModel?.sizeMb,
+                            true
+                          )}">${compareIntegerValue(item.bestModel?.sizeMb)}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Device</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) =>
+                            `<td>${escapeHtml(
+                              item.bestModel?.trainedParams?.device || item.detail.device || "—"
+                            )}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Epochs</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) =>
+                            `<td>${escapeHtml(
+                              String(item.bestModel?.trainedParams?.epochs ?? "—")
+                            )}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Batch size</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) =>
+                            `<td>${escapeHtml(
+                              String(item.bestModel?.trainedParams?.batchSize ?? "—")
+                            )}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Image size</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) =>
+                            `<td>${escapeHtml(
+                              String(item.bestModel?.trainedParams?.imageSize ?? "—")
+                            )}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                    <tr>
+                      <td><strong>Optimizer</strong></td>
+                      ${compareItems
+                        .map(
+                          (item) =>
+                            `<td>${escapeHtml(item.bestModel?.trainedParams?.optimizer || "—")}</td>`
+                        )
+                        .join("")}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            `
+            : `<div class="empty-state">Выберите минимум два запуска для сравнения</div>`
+        }
+      </section>
+    </div>
+  `);
+
+  qs("#compareDatasetSelect")?.addEventListener("change", async (event) => {
+    state.compareDatasetId = event.target.value;
+    state.compareRunIds = getRunsByDataset(state.compareDatasetId)
+      .slice(0, 2)
+      .map((run) => run.id);
+    await renderComparePage();
+  });
+
+  qs("#compareRunList")?.addEventListener("change", async () => {
+    state.compareRunIds = qsa('input[type="checkbox"]:checked', qs("#compareRunList")).map(
+      (input) => input.value
+    );
+    await renderComparePage();
+  });
 }
 
 async function bootstrap() {

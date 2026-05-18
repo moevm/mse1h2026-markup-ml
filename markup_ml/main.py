@@ -20,6 +20,7 @@ from app.core.image_validator import validate_images
 from app.core.label_validator import validate_label_file
 from app.core.orc import AutoMLOrchestrator
 from app.core.random_search_combinations import random_search_params
+from app.core.metrics_parser import parse_metrics_from_folder
 from app.core.training_results import read_training_history
 from app.core.tpe_optimizer import STUDY_STORAGE_URI, TPEOptimizer, optuna as optuna_module
 
@@ -1234,6 +1235,59 @@ def model_score(model: dict[str, Any]) -> float:
     return metric_value(model, "map", "mAP") or -1.0
 
 
+def collect_metric_sources(metrics: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not isinstance(metrics, dict):
+        return []
+
+    sources = [metrics]
+    raw_metrics = metrics.get("raw")
+    normalized_metrics = metrics.get("normalized")
+
+    if isinstance(raw_metrics, dict):
+        sources.append(raw_metrics)
+    if isinstance(normalized_metrics, dict):
+        sources.append(normalized_metrics)
+
+    return sources
+
+
+def metric_from_sources(metrics: Optional[dict[str, Any]], *keys: str) -> Optional[float]:
+    for source in collect_metric_sources(metrics):
+        value = metric_value(source, *keys)
+        if value is not None:
+            return value
+    return None
+
+
+def apply_metrics_to_model_entry(model_entry: dict[str, Any], metrics: Optional[dict[str, Any]]) -> dict[str, Any]:
+    model_entry["map"] = metric_from_sources(
+        metrics,
+        "metrics/mAP50-95(B)",
+        "metrics/mAP50-95",
+        "mAP",
+        "mAP50-95",
+        "map",
+    )
+    model_entry["precision"] = metric_from_sources(
+        metrics,
+        "metrics/precision(B)",
+        "metrics/precision",
+        "precision",
+    )
+    model_entry["recall"] = metric_from_sources(
+        metrics,
+        "metrics/recall(B)",
+        "metrics/recall",
+        "recall",
+    )
+    model_entry["fps"] = metric_from_sources(
+        metrics,
+        "speed/inference",
+        "inference_time",
+    )
+    return model_entry
+
+
 def build_model_entry(result: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
     if result.get("status") != "completed":
         return None, None
@@ -1249,13 +1303,15 @@ def build_model_entry(result: dict[str, Any]) -> tuple[Optional[dict[str, Any]],
             history = read_training_history(train_dir)
         except (OSError, ValueError, KeyError):
             history = None
+        if not metrics:
+            metrics = parse_metrics_from_folder(str(train_dir)) or {}
 
     model_entry = {
         "name": train_dir.name if train_dir else f"trial_{result.get('trial', 0):03d}",
-        "map": metric_value(metrics, "metrics/mAP50-95(B)", "metrics/mAP50-95"),
-        "precision": metric_value(metrics, "metrics/precision(B)", "metrics/precision"),
-        "recall": metric_value(metrics, "metrics/recall(B)", "metrics/recall"),
-        "fps": metric_value(metrics, "speed/inference", "inference_time"),
+        "map": None,
+        "precision": None,
+        "recall": None,
+        "fps": None,
         "sizeMb": round(model_path.stat().st_size / (1024 * 1024), 2)
         if model_path and model_path.exists()
         else None,
@@ -1271,6 +1327,7 @@ def build_model_entry(result: dict[str, Any]) -> tuple[Optional[dict[str, Any]],
         },
         "artifacts": build_run_artifacts(train_dir),
     }
+    apply_metrics_to_model_entry(model_entry, metrics)
 
     edge_chart = None
     if history and any(history.values()):
@@ -1333,12 +1390,60 @@ def hydrate_run_detail_from_results(run_id: str, results: list[dict[str, Any]]) 
         detail["summary"]["bestMap"] = metric_value(best_model, "map", "mAP")
         detail["summary"]["bestPrecision"] = best_model.get("precision")
         detail["summary"]["bestRecall"] = best_model.get("recall")
+        detail["bestMap"] = detail["summary"]["bestMap"]
+        detail["precision"] = detail["summary"]["bestPrecision"]
+        detail["recall"] = detail["summary"]["bestRecall"]
         detail["artifacts"] = deepcopy(best_model.get("artifacts") or {})
     else:
         detail["artifacts"] = build_run_artifacts(None)
 
     refresh_run_summary(run_id)
     refresh_dataset_best_models(detail["datasetId"])
+
+
+def refresh_run_metrics_from_disk(run_id: str) -> None:
+    detail = RUN_DETAILS.get(run_id)
+    if not detail:
+        return
+
+    run_root_value = detail.get("runRoot")
+    run_root = Path(str(run_root_value)).resolve() if run_root_value else (RUNS_DIR / "detect" / run_id).resolve()
+    models = detail.get("models") or []
+    if not models:
+        return
+
+    updated_models: list[dict[str, Any]] = []
+    for model in models:
+        next_model = deepcopy(model)
+        train_dir = run_root / str(model.get("name") or "")
+        parsed_metrics = parse_metrics_from_folder(str(train_dir)) if train_dir.exists() else None
+        apply_metrics_to_model_entry(next_model, parsed_metrics)
+        updated_models.append(next_model)
+
+    updated_models.sort(key=model_score, reverse=True)
+    detail["models"] = updated_models
+
+    if updated_models:
+        best_model = updated_models[0]
+        detail["summary"]["bestModel"] = best_model.get("name")
+        detail["summary"]["bestMap"] = metric_value(best_model, "map", "mAP")
+        detail["summary"]["bestPrecision"] = best_model.get("precision")
+        detail["summary"]["bestRecall"] = best_model.get("recall")
+        detail["artifacts"] = deepcopy(best_model.get("artifacts") or {})
+        detail["bestMap"] = detail["summary"]["bestMap"]
+        detail["precision"] = detail["summary"]["bestPrecision"]
+        detail["recall"] = detail["summary"]["bestRecall"]
+
+    refresh_run_summary(run_id)
+    refresh_dataset_best_models(detail["datasetId"])
+
+
+def refresh_all_run_metrics_from_disk() -> None:
+    for run_id in list(RUN_DETAILS.keys()):
+        try:
+            refresh_run_metrics_from_disk(str(run_id))
+        except Exception as exc:
+            print(f"Failed to refresh metrics for run {run_id}: {exc}")
 
 
 def to_simple_yaml(value: Any, indent: int = 0) -> str:
@@ -2112,6 +2217,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 DATASETS_DIR.mkdir(parents=True, exist_ok=True)
 (UPLOADS_DIR / "datasets").mkdir(parents=True, exist_ok=True)
 load_runtime_state()
+refresh_all_run_metrics_from_disk()
 
 if not STATUS_MANAGER.status_file.exists():
     safe_update_global_status(
